@@ -40,6 +40,7 @@ body{margin:0;background:var(--ink);color:var(--fg);font-family:var(--f-body);fo
 .picker button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
 .picker i{width:22px;height:22px;border-radius:6px;flex:none}
 .sw-armor{background:linear-gradient(135deg,#dcdcd6 0 55%,#46605f 55% 80%,#ffae35 80%)}
+.sw-male{background:linear-gradient(135deg,#c79c82 0 40%,#1d1d1f 40% 75%,#4a4a42 75%)}
 .sw-girl{background:linear-gradient(135deg,#1c1f24 0 50%,#c9ccd6 50% 72%,#3fd0d4 72%)}
 .snd-chip{all:unset;cursor:pointer;position:absolute;top:max(14px,env(safe-area-inset-top,0px));right:max(14px,env(safe-area-inset-right,0px));
   padding:8px 12px;border-radius:999px;font-size:12px;font-weight:600;background:var(--amber);color:var(--ink);box-shadow:0 4px 18px rgba(0,0,0,.35)}
@@ -111,7 +112,8 @@ input[type=range]{flex:1;accent-color:var(--amber)}
   .foot{font-size:10.5px}
   .call b{font-size:clamp(26px,7vw,44px)}
   .cam button{padding:7px 8px;font-size:11px}
-  .call{top:auto;bottom:62px} .picker button{font-size:11.5px;padding:6px 8px 6px 6px} .picker i{width:16px;height:16px}
+  .call{top:auto;bottom:62px}
+  .picker{flex-direction:row;padding:5px;gap:4px} .picker-l,.picker .nm{display:none} .picker button{padding:5px} .picker i{width:24px;height:24px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -121,8 +123,9 @@ input[type=range]{flex:1;accent-color:var(--amber)}
     <canvas id="view"></canvas>
     <div class="picker" role="group" aria-label="훈련 캐릭터">
       <span class="picker-l">캐릭터</span>
-      <button type="button" data-char="armor" aria-pressed="true"><i class="sw-armor"></i>아머 슈트</button>
-      <button type="button" data-char="girl" aria-pressed="false"><i class="sw-girl"></i>퓨처리스틱 걸</button>
+      <button type="button" title="아머 슈트" aria-label="아머 슈트" data-char="armor" aria-pressed="true"><i class="sw-armor"></i><span class="nm">아머 슈트</span></button>
+      <button type="button" title="퓨처리스틱 걸" aria-label="퓨처리스틱 걸" data-char="girl" aria-pressed="false"><i class="sw-girl"></i><span class="nm">퓨처리스틱 걸</span></button>
+      <button type="button" title="리얼 파이터" aria-label="리얼 파이터" data-char="male" aria-pressed="false"><i class="sw-male"></i><span class="nm">리얼 파이터</span></button>
     </div>
     <div class="loading" id="loading">캐릭터 불러오는 중…</div>
     <div class="call idle" id="call"><b id="callKo">준비</b><small id="callEn">Fighting Idle</small></div>
@@ -324,7 +327,7 @@ const Sound = (()=>{
       const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=ff*fs; bp.Q.value=ff/bw;
       const fg=ctx.createGain(); fg.gain.value=gg*2.2; sum.connect(bp); bp.connect(fg); fg.connect(sh);
     }
-    const helmet = ctx.createBiquadFilter(); helmet.type='peaking'; helmet.frequency.value=1700; helmet.gain.value= voice==='f' ? 1.5 : 4; helmet.Q.value=0.8;
+    const helmet = ctx.createBiquadFilter(); helmet.type='peaking'; helmet.frequency.value=1700; helmet.gain.value= voice==='m' ? 4 : 1.5; helmet.Q.value=0.8;
     sh.connect(helmet); helmet.connect(g); out(g,voxBus,0.3);
     for (const s of [src,vib,breath]){ s.start(t); s.stop(t+dur+0.05); }
     // aspirated onset "h"
@@ -334,7 +337,7 @@ const Sound = (()=>{
   let lastKiai = 0, voice = 'm';
   function kiai(kind='short', power=1){
     if (!ctx) return; const now=ctx.currentTime; if (now-lastKiai<0.22) return; lastKiai=now;
-    const f0 = (voice==='f' ? R(290,340) : R(150,185))*(0.95+0.1*power), p = 0.42*Math.min(power,1.3)*(voice==='f'?0.9:1), t=now+0.035;
+    const f0 = (voice==='f' ? R(290,340) : voice==='h' ? R(118,142) : R(150,185))*(0.95+0.1*power), p = 0.42*Math.min(power,1.3)*(voice==='f'?0.9:1), t=now+0.035;
     if (kind==='short') syll(t,'a',f0,R(0.13,0.18),p);
     else if (kind==='long') syll(t,'a',f0*1.05,R(0.32,0.42),p,-0.3);
     else if (kind==='iyap'){ syll(t,'i',f0*0.95,0.11,p*0.75,0.08); syll(t+0.12,'a',f0*1.18,0.3,p,-0.32); }
@@ -445,8 +448,9 @@ let charRoot = null, charKey = null, loadSeq = 0;
 const CHARS = {
   armor: {file:'fighter.glb', name:'ARMOR_SUIT', ko:'아머 슈트', voice:'m'},
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
+  male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610210743';
+const BUILD = '202610210751';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -534,7 +538,7 @@ async function loadCharacter(key){
   const pressed = document.querySelector('[data-cam][aria-pressed="true"]');
   setCam(pressed ? pressed.dataset.cam : 'front', !pressed || pressed.dataset.cam==='front');
   try { localStorage.setItem('dojo-char', key); } catch(_){}
-  fetchChar(key==='armor'?'girl':'armor').catch(()=>{});   // warm the other one
+  for (const k in CHARS) if (k!==key) fetchChar(k).catch(()=>{});   // warm the others
   } catch(e){ console.error(e); $('loading').style.display='grid'; $('loading').textContent = '초기화 오류: '+e.message; }
 }
 document.querySelectorAll('[data-char]').forEach(b=>b.addEventListener('click', ()=>loadCharacter(b.dataset.char)));
