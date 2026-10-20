@@ -139,7 +139,7 @@ input[type=range]{flex:1;accent-color:var(--amber)}
   </section>
 
   <aside class="rail">
-    <div class="brand"><h1>무술 수련장</h1><span id="brandTag">ARMOR_SUIT · 14 MOTIONS</span></div>
+    <div class="brand"><h1>무술 수련장</h1><span id="brandTag">ARMOR_SUIT · 16 MOTIONS</span></div>
     <dl class="tally">
       <div><dt>총 동작</dt><dd id="tTotal">0</dd></div>
       <div><dt>타격</dt><dd id="tStrike">0</dd></div>
@@ -168,7 +168,7 @@ input[type=range]{flex:1;accent-color:var(--amber)}
       <div class="btns"><button type="button" class="cta" id="drillGo">연속 훈련 시작</button><button type="button" class="cta ghost" id="stop">정지</button></div>
     </div>
 
-    <p class="foot">키보드: 숫자 1–9, 0, Q, W, E, R로 각 동작 · Space 정지. 동작 데이터는 Adobe Mixamo에서 이 캐릭터에 맞춰 받은 모션입니다. 드래그로 시점을 돌리고 휠로 확대합니다. 소리는 모두 브라우저에서 합성하며, 휘두름과 기합은 손발 속도가 가장 빠른 순간에 맞춰 납니다.</p>
+    <p class="foot">키보드: 숫자 1–9, 0과 T, Y, Q, W, E, R로 각 동작 · Space 정지. 동작 데이터는 Adobe Mixamo에서 이 캐릭터에 맞춰 받은 모션입니다. 드래그로 시점을 돌리고 휠로 확대합니다. 소리는 모두 브라우저에서 합성하며, 휘두름과 기합은 손발 속도가 가장 빠른 순간에 맞춰 납니다.</p>
   </aside>
 </div>
 
@@ -357,11 +357,13 @@ const MOVES = [
   {id:'hook',ko:'훅',en:'Hook Punch',g:'punch',k:'3'},
   {id:'combo4',ko:'4연타',en:'Punch Combo',g:'punch',k:'4'},
   {id:'elbow',ko:'팔꿈치·어퍼',en:'Elbow Uppercut',g:'punch',k:'5'},
-  {id:'frontkick',ko:'앞차기',en:'Front Snap Kick',g:'kick',k:'6'},
-  {id:'roundhouse',ko:'돌려차기',en:'Roundhouse Kick',g:'kick',k:'7'},
-  {id:'sidekick',ko:'옆차기',en:'Side Kick',g:'kick',k:'8'},
-  {id:'spinback',ko:'뒤돌려차기',en:'Spinning Back Kick',g:'kick',k:'9'},
-  {id:'hurricane',ko:'회오리 발차기',en:'Hurricane Kick',g:'kick',k:'0'},
+  {id:'bodyonetwo',ko:'바디 원투',en:'Body Jab Cross',g:'punch',k:'6'},
+  {id:'frontkick',ko:'앞차기',en:'Front Snap Kick',g:'kick',k:'7'},
+  {id:'roundhouse',ko:'돌려차기',en:'Roundhouse Kick',g:'kick',k:'8'},
+  {id:'sidekick',ko:'옆차기',en:'Side Kick',g:'kick',k:'9'},
+  {id:'spinback',ko:'뒤돌려차기',en:'Spinning Back Kick',g:'kick',k:'0'},
+  {id:'lowkick',ko:'로우킥',en:'MMA Low Kick',g:'kick',k:'T'},
+  {id:'knee',ko:'무릎 차기',en:'Muay Thai Knee',g:'kick',k:'Y'},
   {id:'block',ko:'막기',en:'High Block',g:'guard',k:'Q'},
   {id:'dodge',ko:'피하기',en:'Dodge Retreat',g:'guard',k:'W'},
   {id:'bow',ko:'인사',en:'Formal Bow',g:'rite',k:'E'},
@@ -520,7 +522,7 @@ async function loadCharacter(key){
   mixer.addEventListener('finished', onFinished);
   mixer.addEventListener('loop', e=>{ if (e.action===current && current!==idleAct) bump(curId); });
   Sound.setVoice(CHARS[key].voice);
-  $('brandTag').textContent = CHARS[key].name + ' · 14 MOTIONS';
+  $('brandTag').textContent = CHARS[key].name + ' · 16 MOTIONS';
   $('loading').style.display = 'none';
   const pressed = document.querySelector('[data-cam][aria-pressed="true"]');
   setCam(pressed ? pressed.dataset.cam : 'front', !pressed || pressed.dataset.cam==='front');
@@ -557,7 +559,7 @@ function onFinished(e){
 }
 
 // drill
-const POOL = ['jab','cross','hook','combo4','elbow','frontkick','roundhouse','sidekick','spinback','block','dodge'];
+const POOL = ['jab','cross','hook','combo4','elbow','bodyonetwo','frontkick','roundhouse','sidekick','spinback','lowkick','knee','block','dodge'];
 function renderSeq(){
   $('seq').innerHTML = drillList.length ? drillList.map((id,i)=>`<span class="${i<drillIdx?'done':i===drillIdx?'now':''}">${byId[id].ko}</span>`).join('') : '<span>대기 중</span>';
 }
@@ -622,7 +624,7 @@ function analyse(root){
   }
   mixer.stopAllAction();
 }
-const KIAI = {jab:'short',cross:'short',hook:'short',combo4:'short',elbow:'long',frontkick:'iyap',roundhouse:'iyap',sidekick:'long',spinback:'iyap',hurricane:'long'};
+const KIAI = {jab:'short',cross:'short',hook:'short',combo4:'short',elbow:'long',frontkick:'iyap',roundhouse:'iyap',sidekick:'long',spinback:'iyap',lowkick:'short',knee:'iyap',bodyonetwo:'short'};
 function buildEvents(id){
   const g = byId[id].g, dur = actions[id].getClip().duration, all = FX[id]||[];
   const want = g==='punch' ? 'hand' : g==='kick' ? 'foot' : null;
@@ -632,8 +634,8 @@ function buildEvents(id){
     const main = pk.reduce((a,b)=> (!a||b.s>a.s)?b:a, null);
     for (const p of pk) ev.push({t:Math.max(0,p.t-0.08), f:()=>Sound.whoosh(0.5+0.7*p.s/maxS, p.limb==='foot')});
     if (main) ev.push({t:Math.max(0,main.t-0.06), f:()=>Sound.kiai(KIAI[id]||'short', 1)});
-    if (id==='combo4'||id==='elbow') for (const p of pk) if (p!==main) ev.push({t:Math.max(0,p.t-0.06), f:()=>Sound.kiai('hut',0.8)});
-    if (g==='kick') ev.push({t:dur*0.86, f:()=>Sound.stomp(id==='hurricane'?1.25:0.55)});
+    if (id==='combo4'||id==='elbow'||id==='bodyonetwo') for (const p of pk) if (p!==main) ev.push({t:Math.max(0,p.t-0.06), f:()=>Sound.kiai('hut',0.8)});
+    if (g==='kick') ev.push({t:dur*0.86, f:()=>Sound.stomp(id==='knee'?0.45:0.55)});
     else ev.push({t:Math.min(dur*0.9, (main?main.t:0)+0.45), f:()=>Sound.step(0.45)});
   }
   if (id==='block'){ const t = pk[0]?pk[0].t:0.35; ev.push({t:Math.max(0,t-0.06), f:()=>Sound.whoosh(0.55,false)}, {t, f:()=>{Sound.clank(); Sound.kiai('hut',0.7);}}); }
