@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>무술 수련장</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -407,7 +408,8 @@ function setCall(id){
 const canvas = $('view');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
 renderer.setClearColor(0x000000, 0);
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+let pr = Math.min(devicePixelRatio||1, 1.5);
+renderer.setPixelRatio(pr);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -420,7 +422,7 @@ camera.position.set(0,1.0,4.2); controls.target.set(0,0.95,0);
 controls.enableDamping = true; controls.minDistance = 1.2; controls.maxDistance = 9; controls.maxPolarAngle = Math.PI*0.53;
 
 const key = new THREE.DirectionalLight(0xfff1dc, 2.4); key.position.set(2.2,4,3); key.castShadow = true;
-key.shadow.mapSize.set(2048,2048); Object.assign(key.shadow.camera,{left:-2,right:2,top:3,bottom:-1,near:.5,far:12}); key.shadow.bias=-0.0004;
+key.shadow.mapSize.set(1024,1024); Object.assign(key.shadow.camera,{left:-2,right:2,top:3,bottom:-1,near:.5,far:12}); key.shadow.bias=-0.0004;
 scene.add(key, new THREE.HemisphereLight(0xcfd8e0, 0x2a2420, 0.55));
 const rim = new THREE.DirectionalLight(0x9fd0cc, 1.4); rim.position.set(-3,2.5,-3); scene.add(rim);
 
@@ -444,10 +446,11 @@ const CHARS = {
   armor: {file:'fighter.glb', name:'ARMOR_SUIT', ko:'아머 슈트', voice:'m'},
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
 };
+const BUILD = '202610210743';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
-  if (!cache[key]) cache[key] = new Promise((res, rej)=>loader.load(CHARS[key].file, res, ev=>{
+  if (!cache[key]) cache[key] = new Promise((res, rej)=>loader.load(CHARS[key].file + '?v=' + BUILD, res, ev=>{
     if (key===charWanted && ev.total) $('loading').textContent = `캐릭터 불러오는 중… ${Math.min(99, Math.round(100*ev.loaded/ev.total))}%`;
   }, rej));
   return cache[key];
@@ -487,7 +490,7 @@ async function loadCharacter(key){
   const box = new THREE.Box3().setFromObject(root);
   H = box.max.y - box.min.y;
   if (!(H > 0.5 && H < 4)){ H = 1.8; box.min.y = 0; }
-  window.__dojo = {H, min: box.min.y, max: box.max.y, key, camera, controls};
+  Object.assign(window.__dojo = window.__dojo||{}, {H, key, camera, controls});
   root.position.y -= box.min.y; center.set(0, H*0.52, 0);
 
   mixer = new THREE.AnimationMixer(root);
@@ -516,6 +519,9 @@ async function loadCharacter(key){
     gltf.__fixed = true;
   }
   for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+  const missing = MOVES.filter(m=>!actions[m.id]).map(m=>m.ko);
+  for (const m of MOVES){ const b = btn[m.id]; if (b){ b.disabled = !actions[m.id]; b.style.opacity = actions[m.id] ? '' : '.35'; } }
+  if (missing.length) console.warn('missing clips', missing);
   analyse(root);
   for (const id in actions) EV[id] = buildEvents(id);
   idleAct = actions.idle; idleAct.play(); current = idleAct; curId = 'idle'; setCall('idle');
@@ -523,7 +529,8 @@ async function loadCharacter(key){
   mixer.addEventListener('loop', e=>{ if (e.action===current && current!==idleAct) bump(curId); });
   Sound.setVoice(CHARS[key].voice);
   $('brandTag').textContent = CHARS[key].name + ' · 16 MOTIONS';
-  $('loading').style.display = 'none';
+  $('loading').style.display = missing.length ? 'grid' : 'none';
+  if (missing.length) $('loading').textContent = '모델 파일이 최신이 아닙니다. 새로고침해 주세요. (없는 동작: '+missing.join(', ')+')';
   const pressed = document.querySelector('[data-cam][aria-pressed="true"]');
   setCam(pressed ? pressed.dataset.cam : 'front', !pressed || pressed.dataset.cam==='front');
   try { localStorage.setItem('dojo-char', key); } catch(_){}
@@ -674,26 +681,49 @@ function resize(){
 }
 new ResizeObserver(resize).observe(canvas); resize();
 const clock = new THREE.Clock();
+document.addEventListener('visibilitychange', ()=>{ clock.getDelta(); });
+// adaptive quality: measured over 2 s windows, steps down until the scene keeps ~30 fps
+let perfT = 0, perfN = 0, quality = 3;
+function adapt(dt){
+  perfT += dt; perfN++;
+  if (perfT < 2) return;
+  const fps = perfN / perfT; perfT = 0; perfN = 0;
+  if (fps >= 28 || quality === 0) return;
+  quality--;
+  if (quality === 2){ pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); resize(); }
+  else if (quality === 1){ pr = 1; renderer.setPixelRatio(1); resize(); renderer.shadowMap.type = THREE.PCFShadowMap;
+    key.shadow.mapSize.set(512,512); if (key.shadow.map){ key.shadow.map.dispose(); key.shadow.map = null; } scene.traverse(o=>{ if (o.material) o.material.needsUpdate = true; }); }
+  else if (quality === 0){ renderer.shadowMap.enabled = false; scene.traverse(o=>{ if (o.material) o.material.needsUpdate = true; }); }
+  console.info('quality ->', quality, 'fps', fps.toFixed(1));
+}
+let loopErr = false;
 renderer.setAnimationLoop(()=>{
-  const dt = Math.min(clock.getDelta(), 0.05);
-  if (mixer) mixer.update(dt);
-  if (current && current!==idleAct && Sound.ready){
-    const t = current.time; if (t < lastT) lastT = -1;
-    for (const e of (EV[curId]||[])) if (e.t > lastT && e.t <= t) e.f();
-    lastT = t;
+  // real elapsed time, so a slow device still plays motions at true speed (capped for tab switches)
+  const dt = Math.min(clock.getDelta(), 0.25);
+  try {
+    if (mixer) mixer.update(dt);
+    if (current && current!==idleAct && Sound.ready){
+      const t = current.time; if (t < lastT) lastT = -1;
+      for (const e of (EV[curId]||[])) if (e.t > lastT && e.t <= t){ try { e.f(); } catch(err){ console.error(err); } }
+      lastT = t;
+    }
+    if (camTween){
+      const k = Math.min((performance.now()-camTween.t0)/650,1), e = 1-Math.pow(1-k,3);
+      camera.position.lerpVectors(camTween.from, camTween.to, e); controls.target.lerpVectors(camTween.tFrom, camTween.target, e);
+      if (k===1) camTween=null;
+    }
+    const striking = current && current!==idleAct && current.isRunning();
+    for (const m of amberMats) m.emissiveIntensity += ((striking?4.2:1.6) - m.emissiveIntensity)*0.15;
+    if (current && current!==idleAct){ const c=current.getClip().duration; $('prog').style.width = (100*Math.min(current.time/c,1))+'%'; }
+    else $('prog').style.width = '0%';
+    controls.update();
+    if (mixer) adapt(dt);
+  } catch(err){
+    if (!loopErr){ loopErr = true; console.error(err); }
   }
-  if (camTween){
-    const k = Math.min((performance.now()-camTween.t0)/650,1), e = 1-Math.pow(1-k,3);
-    camera.position.lerpVectors(camTween.from, camTween.to, e); controls.target.lerpVectors(camTween.tFrom, camTween.target, e);
-    if (k===1) camTween=null;
-  }
-  // amber lights flare while a strike is in progress
-  const striking = current && current!==idleAct && current.isRunning();
-  for (const m of amberMats) m.emissiveIntensity += ((striking?4.2:1.6) - m.emissiveIntensity)*0.15;
-  if (current && current!==idleAct){ const c=current.getClip().duration; $('prog').style.width = (100*Math.min(current.time/c,1))+'%'; }
-  else $('prog').style.width = '0%';
-  controls.update();
   renderer.render(scene, camera);
 });
+window.__dojo = window.__dojo||{};
+Object.defineProperties(window.__dojo, {mixer:{get:()=>mixer}, actions:{get:()=>actions}, current:{get:()=>current}, quality:{get:()=>quality}, pr:{get:()=>pr}});
 loadCharacter(startChar);
 </script>
