@@ -446,7 +446,7 @@ const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
   if (!cache[key]) cache[key] = new Promise((res, rej)=>loader.load(CHARS[key].file, res, ev=>{
-    if (key===charWanted && ev.total) $('loading').textContent = `캐릭터 불러오는 중… ${Math.round(100*ev.loaded/ev.total)}%`;
+    if (key===charWanted && ev.total) $('loading').textContent = `캐릭터 불러오는 중… ${Math.min(99, Math.round(100*ev.loaded/ev.total))}%`;
   }, rej));
   return cache[key];
 }
@@ -485,6 +485,7 @@ async function loadCharacter(key){
   const box = new THREE.Box3().setFromObject(root);
   H = box.max.y - box.min.y;
   if (!(H > 0.5 && H < 4)){ H = 1.8; box.min.y = 0; }
+  window.__dojo = {H, min: box.min.y, max: box.max.y, key};
   root.position.y -= box.min.y; center.set(0, H*0.52, 0);
 
   mixer = new THREE.AnimationMixer(root);
