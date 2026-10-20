@@ -317,18 +317,22 @@ const Sound = (()=>{
     const src = ctx.createOscillator(); src.type='sawtooth';
     src.frequency.setValueAtTime(f0*1.08,t); src.frequency.linearRampToValueAtTime(f0,t+0.04); src.frequency.exponentialRampToValueAtTime(f0*(1+bend),t+dur);
     const vib = ctx.createOscillator(), vg=ctx.createGain(); vib.frequency.value=R(5,7); vg.gain.value=f0*0.02; vib.connect(vg); vg.connect(src.frequency);
-    const breath = noise(); const bh=ctx.createGain(); bh.gain.value=0.35;
+    const breath = noise(); const bh=ctx.createGain(); bh.gain.value= voice==='h' ? 0.5 : 0.35;
     const sh = ctx.createWaveShaper(); const curve=new Float32Array(256); for(let i=0;i<256;i++){const x=i/128-1; curve[i]=Math.tanh(2.2*x);} sh.curve=curve;
     const sum = ctx.createGain(); src.connect(sum); breath.connect(bh); bh.connect(sum);
     const g = ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+0.018);
     g.gain.setValueAtTime(peak,t+dur*0.55); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    const fs = voice==='f' ? 1.17 : 1;
+    const fs = voice==='f' ? 1.17 : voice==='h' ? 0.9 : 1;
     for (const [ff,gg,bw] of VOWEL[vowel]){
       const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=ff*fs; bp.Q.value=ff/bw;
       const fg=ctx.createGain(); fg.gain.value=gg*2.2; sum.connect(bp); bp.connect(fg); fg.connect(sh);
     }
     const helmet = ctx.createBiquadFilter(); helmet.type='peaking'; helmet.frequency.value=1700; helmet.gain.value= voice==='m' ? 4 : 1.5; helmet.Q.value=0.8;
-    sh.connect(helmet); helmet.connect(g); out(g,voxBus,0.3);
+    if (voice==='h'){ // chest resonance under the vowel
+      const chest=ctx.createBiquadFilter(); chest.type='lowpass'; chest.frequency.value=420; const cg=ctx.createGain(); cg.gain.value=0.9;
+      sum.connect(chest); chest.connect(cg); cg.connect(sh);
+    }
+    sh.connect(helmet); helmet.connect(g); out(g,voxBus, voice==='h' ? 0.18 : 0.3);
     for (const s of [src,vib,breath]){ s.start(t); s.stop(t+dur+0.05); }
     // aspirated onset "h"
     const h=noise(), hb=ctx.createBiquadFilter(), hg=ctx.createGain(); hb.type='bandpass'; hb.frequency.value=1600; hb.Q.value=0.7;
@@ -450,7 +454,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610210751';
+const BUILD = '202610210758';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -570,6 +574,7 @@ function onFinished(e){
 }
 
 // drill
+Object.defineProperties(window.__dojo = window.__dojo||{}, {fx:{get:()=>FX}, ev:{get:()=>EV}, sound:{get:()=>Sound}});
 const POOL = ['jab','cross','hook','combo4','elbow','bodyonetwo','frontkick','roundhouse','sidekick','spinback','lowkick','knee','block','dodge'];
 function renderSeq(){
   $('seq').innerHTML = drillList.length ? drillList.map((id,i)=>`<span class="${i<drillIdx?'done':i===drillIdx?'now':''}">${byId[id].ko}</span>`).join('') : '<span>대기 중</span>';
@@ -603,9 +608,10 @@ addEventListener('keydown', e=>{
 // ---------- strike timing from the motion itself ----------
 const FX = {}, EV = {}; let lastT = -1;
 function analyse(root){
-  const pick = n=>root.getObjectByName(n);
-  const limbs = {hand:['mixamorigLeftHand','mixamorigRightHand'].map(pick).filter(Boolean),
-                 foot:['mixamorigLeftToeBase','mixamorigRightToeBase'].map(pick).filter(Boolean)};
+  const pick = (...names)=>{ for (const n of names){ const o = root.getObjectByName(n); if (o) return o; } return null; };
+  const limbs = {hand:[pick('mixamorigLeftHand','CC_Base_L_Hand'), pick('mixamorigRightHand','CC_Base_R_Hand')].filter(Boolean),
+                 foot:[pick('mixamorigLeftToeBase','CC_Base_L_ToeBase'), pick('mixamorigRightToeBase','CC_Base_R_ToeBase')].filter(Boolean)};
+  if (limbs.hand.length<2 || limbs.foot.length<2) console.warn('strike analysis: limbs not found', limbs.hand.length, limbs.foot.length);
   const v = new THREE.Vector3();
   for (const [id,act] of Object.entries(actions)){
     if (id==='idle'||id==='bow') continue;
@@ -645,6 +651,7 @@ function buildEvents(id){
     const main = pk.reduce((a,b)=> (!a||b.s>a.s)?b:a, null);
     for (const p of pk) ev.push({t:Math.max(0,p.t-0.08), f:()=>Sound.whoosh(0.5+0.7*p.s/maxS, p.limb==='foot')});
     if (main) ev.push({t:Math.max(0,main.t-0.06), f:()=>Sound.kiai(KIAI[id]||'short', 1)});
+    else { const t = dur*0.35; ev.push({t:Math.max(0,t-0.08), f:()=>Sound.whoosh(0.9, g==='kick')}, {t, f:()=>Sound.kiai(KIAI[id]||'short', 1)}); }
     if (id==='combo4'||id==='elbow'||id==='bodyonetwo') for (const p of pk) if (p!==main) ev.push({t:Math.max(0,p.t-0.06), f:()=>Sound.kiai('hut',0.8)});
     if (g==='kick') ev.push({t:dur*0.86, f:()=>Sound.stomp(id==='knee'?0.45:0.55)});
     else ev.push({t:Math.min(dur*0.9, (main?main.t:0)+0.45), f:()=>Sound.step(0.45)});
