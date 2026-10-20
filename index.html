@@ -487,7 +487,7 @@ async function loadCharacter(key){
   const box = new THREE.Box3().setFromObject(root);
   H = box.max.y - box.min.y;
   if (!(H > 0.5 && H < 4)){ H = 1.8; box.min.y = 0; }
-  window.__dojo = {H, min: box.min.y, max: box.max.y, key};
+  window.__dojo = {H, min: box.min.y, max: box.max.y, key, camera, controls};
   root.position.y -= box.min.y; center.set(0, H*0.52, 0);
 
   mixer = new THREE.AnimationMixer(root);
