@@ -1,0 +1,22 @@
+robot-test 사운드 팩 — 출처와 라이선스
+(모든 소리는 실제 녹음 원본에서 잘라내기·음량 맞춤·속도 조절·겹치기만 했고, 신디사이저로 만든 소리는 없습니다)
+
+[voice/kiai_male_short_*, kiai_female_short_*, scream_male_04~05, scream_female_04~05]
+[sfx/punch_face_01, hit_heavy_*, whoosh_punch_*, whoosh_kick_02, roll_01 일부]
+[music/bgm_war_drums_ambience]
+  출처: Battle for Wesnoth (https://github.com/wesnoth/wesnoth) — GNU GPL v2 이상
+
+[voice/kiai_male_long_*, kiai_deepmale_*, kiai_female_long_*, scream_male_01~03, scream_female_01~03]
+[sfx/punch_body_*, block_clank_*, knock_wood_01, step_*, victory_horn_01, body_fall_01 일부]
+[music/bgm_honor_bound, bgm_tale_of_warriors, bgm_only_300_stood]
+  출처: 0 A.D. © Wildfire Games (https://www.wildfiregames.com/) — CC BY-SA 3.0
+  https://creativecommons.org/licenses/by-sa/3.0/
+
+[sfx/whoosh_kick_01, stomp_01, drum_roll_01, gong_01~02(심벌·탐), music/bgm_dojo_drum_loop(탐·베이스드럼)]
+  출처: Sonic Pi 샘플 (freesound.org 원본) — CC0 (퍼블릭 도메인)
+
+[sfx/taiko_hit_*, knock_wood_02, stomp_02, clap_01, gong_01·body_fall_01·dojo 루프의 대북 소리]
+  출처: TidalCycles Dirt-Samples (https://github.com/tidalcycles/Dirt-Samples) — 개별 라이선스 표기 없음
+  (공개 배포 시에는 이 파일들을 다른 소리로 바꾸는 것이 안전합니다)
+
+공개 배포(GitHub Pages 등) 시: 위 출처 표기를 페이지나 저장소에 함께 넣어 주세요.

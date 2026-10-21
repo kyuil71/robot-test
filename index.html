@@ -308,7 +308,7 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
       <div class="btns"><button type="button" class="cta" id="drillGo">연속 훈련 시작</button><button type="button" class="cta ghost" id="stop">정지</button></div>
     </div>
 
-    <p class="foot">키보드: 숫자 1–9, 0과 T, Y, Q, W, E, R로 각 동작 · Space 정지. 동작 데이터는 Adobe Mixamo에서 이 캐릭터에 맞춰 받은 모션입니다. 드래그로 시점을 돌리고 휠로 확대합니다. 소리는 모두 브라우저에서 합성하며, 휘두름과 기합은 손발 속도가 가장 빠른 순간에 맞춰 납니다.</p>
+    <p class="foot">키보드: 숫자 1–9, 0과 T, Y, Q, W, E, R로 각 동작 · Space 정지. 동작 데이터는 Adobe Mixamo에서 이 캐릭터에 맞춰 받은 모션입니다. 드래그로 시점을 돌리고 휠로 확대합니다. 휘두름과 기합은 손발 속도가 가장 빠른 순간에 맞춰 납니다. 사운드: Battle for Wesnoth (GPL v2+), 0 A.D. © Wildfire Games (CC BY-SA 3.0), Sonic Pi 샘플 (CC0), TidalCycles Dirt-Samples — 자세한 내용은 sounds/CREDITS.txt.</p>
   </aside>
 </div>
 
@@ -321,7 +321,7 @@ import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 
 // ---------- sound: everything is synthesized with Web Audio, no sample files ----------
 const Sound = (()=>{
-  let ctx=null, master, bgmBus, sfxBus, voxBus, verbSend, started=false, bgmOn=true;
+  let ctx=null, master, bgmBus, sfxBus, voxBus, synthBus, verbSend, started=false, bgmOn=true;
   const vol = {bgm:0.55, sfx:0.8, vox:0.8};
   const R = (a,b)=>a+Math.random()*(b-a);
 
@@ -351,6 +351,7 @@ const Sound = (()=>{
     verbSend = ctx.createGain(); verbSend.gain.value = 1; verbSend.connect(verb);
     bgmBus = ctx.createGain(); sfxBus = ctx.createGain(); voxBus = ctx.createGain();
     for (const b of [bgmBus,sfxBus,voxBus]) b.connect(master);
+    synthBus = ctx.createGain(); synthBus.connect(bgmBus);
     applyVol();
   }
   function applyVol(){ if(!ctx) return; const t=ctx.currentTime;
@@ -363,13 +364,13 @@ const Sound = (()=>{
   const PATTERN = [1,0,0,0.5, 0,0,0.7,0, 1,0,0.4,0, 0,0.6,0,0]; // 16 steps
   function startBgm(){
     const room = noise(brownBuf,true), lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=380;
-    const rg=ctx.createGain(); rg.gain.value=0.22; room.connect(lp); lp.connect(rg); rg.connect(bgmBus); room.start();
+    const rg=ctx.createGain(); rg.gain.value=0.22; room.connect(lp); lp.connect(rg); rg.connect(synthBus); room.start();
     for (const [f,gv] of [[73.42,0.07],[110.0,0.045],[146.83,0.02]]){
       const o=ctx.createOscillator(); o.type='triangle'; o.frequency.value=f; o.detune.value=R(-6,6);
       const g=ctx.createGain(); g.gain.value=gv; const lfo=ctx.createOscillator(); lfo.frequency.value=R(0.05,0.12);
       const lg=ctx.createGain(); lg.gain.value=gv*0.6; lfo.connect(lg); lg.connect(g.gain);
       const f2=ctx.createBiquadFilter(); f2.type='lowpass'; f2.frequency.value=600;
-      o.connect(f2); f2.connect(g); out(g,bgmBus,0.4); o.start(); lfo.start();
+      o.connect(f2); f2.connect(g); out(g,synthBus,0.4); o.start(); lfo.start();
     }
     nextBeat = ctx.currentTime+0.2; nextPluck = ctx.currentTime+2;
     timer = setInterval(schedule, 60);
@@ -390,18 +391,18 @@ const Sound = (()=>{
   function taiko(t, v){
     const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine';
     o.frequency.setValueAtTime(118,t); o.frequency.exponentialRampToValueAtTime(52,t+0.25);
-    env(g,t,0.005,0.55*v,0.55); o.connect(g); out(g,bgmBus,0.35); o.start(t); o.stop(t+0.7);
+    env(g,t,0.005,0.55*v,0.55); o.connect(g); out(g,synthBus,0.35); o.start(t); o.stop(t+0.7);
     const n=noise(), f=ctx.createBiquadFilter(), ng=ctx.createGain(); f.type='lowpass'; f.frequency.value=900;
-    env(ng,t,0.002,0.25*v,0.08); n.connect(f); f.connect(ng); out(ng,bgmBus,0.2); n.start(t); n.stop(t+0.15);
+    env(ng,t,0.002,0.25*v,0.08); n.connect(f); f.connect(ng); out(ng,synthBus,0.2); n.start(t); n.stop(t+0.15);
   }
   function rim(t, v){
     const n=noise(), f=ctx.createBiquadFilter(), g=ctx.createGain(); f.type='bandpass'; f.frequency.value=2600; f.Q.value=6;
-    env(g,t,0.001,0.25*v,0.05); n.connect(f); f.connect(g); out(g,bgmBus,0.3); n.start(t); n.stop(t+0.08);
+    env(g,t,0.001,0.25*v,0.05); n.connect(f); f.connect(g); out(g,synthBus,0.3); n.start(t); n.stop(t+0.08);
   }
   function pluck(t, f){
     for (const [mul,gv,dec] of [[1,0.12,1.6],[2.01,0.05,0.7],[3.02,0.025,0.35]]){
       const o=ctx.createOscillator(), g=ctx.createGain(); o.type= mul===1?'triangle':'sine'; o.frequency.value=f*mul;
-      env(g,t,0.004,gv,dec); o.connect(g); out(g,bgmBus,0.6); o.start(t); o.stop(t+dec+0.1);
+      env(g,t,0.004,gv,dec); o.connect(g); out(g,synthBus,0.6); o.start(t); o.stop(t+dec+0.1);
     }
   }
 
@@ -508,10 +509,94 @@ const Sound = (()=>{
     for (const [f,gv,dec] of [[210,0.4,0.18],[520,0.18,0.08],[1180,0.08,0.04]]){ const o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.value=f*R(0.95,1.05); env(g,t,0.001,gv,dec); o.connect(g); out(g,sfxBus,0.35); o.start(t); o.stop(t+dec+0.05); }
   }
   function roll(){ if (!ctx) return; const t0=ctx.currentTime; for (let i=0;i<22;i++){ const t=t0+i*0.07; const v=0.25+0.6*(i/22); const o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(55,t+0.2); env(g,t,0.004,0.35*v,0.25); o.connect(g); out(g,bgmBus,0.3); o.start(t); o.stop(t+0.3); } }
-  function start(){ init(); if (ctx.state==='suspended') ctx.resume(); if (!started){ started=true; startBgm(); } }
+
+  // ---- recorded sound pack (sounds/…): each role plays a real recording; the synth above stays as the fallback ----
+  const SP = 'sounds/';
+  const v5 = (b, n)=>Array.from({length:n}, (_, i)=>`${b}_0${i+1}`);
+  const LIB = {
+    whoosh_p: v5('sfx/whoosh_punch',3), whoosh_k: v5('sfx/whoosh_kick',2),
+    face: ['sfx/punch_face_01'], body: v5('sfx/punch_body',3), heavy: v5('sfx/hit_heavy',2),
+    clank: v5('sfx/block_clank',2), step: v5('sfx/step',3), stomp: v5('sfx/stomp',2), fall: ['sfx/body_fall_01'],
+    gong: ['sfx/gong_01'], gongBig: ['sfx/gong_02'], knock: v5('sfx/knock_wood',2), drumroll: ['sfx/drum_roll_01'], roll: ['sfx/roll_01'],
+    taikoBig: ['sfx/taiko_hit_01'], taiko: ['sfx/taiko_hit_02','sfx/taiko_hit_03'], clap: ['sfx/clap_01'], horn: ['sfx/victory_horn_01'],
+    // armor suit: male kiai heard through the helmet
+    'm.short': v5('voice/kiai_male_short',5), 'm.long': v5('voice/kiai_male_long',2), 'm.ugh': ['voice/scream_male_04','voice/scream_male_05'], 'm.fall': ['voice/scream_male_02','voice/scream_male_03'],
+    // realistic fighter: the deep male set (plus the male set pitched down)
+    'h.short': ['voice/kiai_deepmale_short_01','voice/kiai_male_short_02','voice/kiai_male_short_04'], 'h.long': v5('voice/kiai_deepmale_long',2), 'h.ugh': ['voice/scream_male_05','voice/scream_male_03'], 'h.fall': ['voice/scream_male_01','voice/scream_male_02'],
+    // futuristic girl
+    'f.short': v5('voice/kiai_female_short',3), 'f.long': v5('voice/kiai_female_long',3), 'f.ugh': ['voice/scream_female_04','voice/scream_female_05'], 'f.fall': v5('voice/scream_female',3),
+  };
+  const buf = {}; let packLoading = false;
+  function loadPack(){
+    if (packLoading) return; packLoading = true;
+    for (const n of new Set(Object.values(LIB).flat()))
+      fetch(SP+n+'.mp3').then(r=>r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(a=>ctx.decodeAudioData(a)).then(b=>{ buf[n] = b; }).catch(()=>{});
+  }
+  const lastPick = {};
+  function pick(key){
+    const l = (LIB[key]||[]).filter(n=>buf[n]); if (!l.length) return null;
+    let n = l[Math.floor(Math.random()*l.length)];
+    if (l.length > 1 && n === lastPick[key]) n = l[(l.indexOf(n)+1) % l.length];      // no immediate repeats
+    return lastPick[key] = n;
+  }
+  function helmet(){ const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=230;
+    const pk=ctx.createBiquadFilter(); pk.type='peaking'; pk.frequency.value=1700; pk.gain.value=6; pk.Q.value=1.1;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=4600; return [hp, pk, lp]; }
+  function smp(key, {gain=1, rate=1, bus, wet=0.2, when=0, filter=null, rateFor=null}={}){
+    if (!ctx) return false; const n = pick(key); if (!n) return false;
+    const s = ctx.createBufferSource(); s.buffer = buf[n]; s.playbackRate.value = (rateFor ? rateFor(n) : rate) * R(0.97, 1.03);
+    const g = ctx.createGain(); g.gain.value = gain; let head = s;
+    if (filter) for (const f of filter){ head.connect(f); head = f; }
+    head.connect(g); out(g, bus || sfxBus, wet); s.start(ctx.currentTime + when); return true;
+  }
+  const SY = {whoosh, stomp, step, clank, gong, kiai, slap, knock, roll};
+  const pWhoosh = (power=1, heavy=false)=>{ if (!smp(heavy ? 'whoosh_k' : 'whoosh_p', {gain:0.5 + 0.45*Math.min(power, 1.3), wet:0.12})) SY.whoosh(power, heavy); };
+  const pStomp = (p=1)=>{ if (!smp('stomp', {gain:0.35 + 0.5*Math.min(p, 1.3), wet:0.15})) SY.stomp(p); };
+  const pFall = ()=>{ if (!smp('fall', {gain:1.0, wet:0.3})) { SY.stomp(1.3); setTimeout(()=>SY.stomp(0.6), 140); } };
+  const pStep = (p=0.5)=>{ if (!smp('step', {gain:0.3 + 0.7*p, wet:0.08})) SY.step(p); };
+  const pClank = ()=>{ if (!smp('clank', {gain:0.9, wet:0.25})) SY.clank(); };
+  const pGong = (big)=>{ if (!smp(big ? 'gongBig' : 'gong', {gain:big ? 0.9 : 0.75, wet:0.5})) SY.gong(); };
+  const pSlap = (power=0.6, zone='head')=>{
+    const ok = smp(zone==='head' ? 'face' : 'body', {gain:0.55 + 0.5*Math.min(power, 1), wet:0.15});
+    if (ok && power > 0.7) smp('heavy', {gain:0.5 + 0.4*power, wet:0.2});
+    if (!ok) SY.slap(power, zone);
+  };
+  const pKnock = ()=>{ if (!smp('knock', {gain:0.8, wet:0.35})) SY.knock(); };
+  const pRoll = ()=>{ if (!smp('drumroll', {gain:0.8, wet:0.3, bus:bgmBus})) SY.roll(); };
+  const KMAP = {short:'short', hut:'short', iyap:'long', long:'long', ugh:'ugh', fall:'fall'};
+  const lastVox = {};
+  const pKiai = (kind='short', power=1, v)=>{
+    if (!ctx) return; const vv = v || voice, now = ctx.currentTime;
+    if (now - (lastVox[vv]||0) < 0.22) return;
+    const key = vv + '.' + (KMAP[kind] || 'short');
+    const ok = smp(key, {gain:(kind==='hut' ? 0.6 : 0.95) * Math.min(power, 1.2), bus:voxBus, wet:vv==='m' ? 0.18 : 0.12,
+      filter: vv==='m' ? helmet() : null,
+      rateFor: n=>(vv==='h' && n.includes('kiai_male')) ? 0.9 : kind==='hut' ? 1.06 : 1});
+    if (ok){ lastVox[vv] = now; return; }
+    SY.kiai(kind==='fall' ? 'long' : kind, power, v);
+  };
+  // music: recorded tracks per scene, crossfaded; the synthesized bed only plays if a track can't load
+  const TRACKS = {practice:['music/bgm_dojo_drum_loop_96bpm'], build:['music/bgm_war_drums_ambience'],
+                  fight:['music/bgm_honor_bound','music/bgm_tale_of_warriors','music/bgm_only_300_stood']};
+  let music = null, musicMode = null, wantMusic = 'practice';
+  function setMusic(mode){
+    wantMusic = mode; if (!ctx || mode === musicMode) return; musicMode = mode;
+    if (music){ const m = music; m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.5); setTimeout(()=>{ m.a.pause(); }, 2500); music = null; }
+    if (!mode){ synthBus.gain.setTargetAtTime(0, ctx.currentTime, 0.4); return; }
+    const list = TRACKS[mode], n = list[Math.floor(Math.random()*list.length)];
+    const a = new Audio(SP + n + '.mp3'); a.loop = true; a.preload = 'auto';
+    const g = ctx.createGain(); g.gain.value = 0;
+    try { ctx.createMediaElementSource(a).connect(g); g.connect(bgmBus); } catch(_){ return; }
+    music = {a, g};
+    a.play().then(()=>{ g.gain.setTargetAtTime(mode==='fight' ? 0.75 : 0.9, ctx.currentTime, 0.7); synthBus.gain.setTargetAtTime(0, ctx.currentTime, 0.6); })
+            .catch(()=>{ synthBus.gain.setTargetAtTime(1, ctx.currentTime, 0.5); });
+  }
+  function start(){ init(); if (ctx.state==='suspended') ctx.resume(); if (!started){ started=true; startBgm(); loadPack(); setMusic(wantMusic); } }
   return {
-    start, whoosh, stomp, step, clank, gong, kiai,
-    setVoice(v){ voice = v; }, slap, sweep, knock, roll,
+    start, whoosh:pWhoosh, stomp:pStomp, step:pStep, clank:pClank, gong:pGong, kiai:pKiai, fall:pFall,
+    setVoice(v){ voice = v; }, slap:pSlap, sweep, knock:pKnock, roll:pRoll, setMusic,
+    sfx(key, opts){ return smp(key, opts||{}); },
+    get loaded(){ return Object.keys(buf).length; }, get musicNow(){ return music && !music.a.paused ? music.a.src.split('/').pop() : null; },
     get ready(){ return !!ctx && started; },
     setVol(k,v){ vol[k]=v; applyVol(); },
     setBgm(on){ bgmOn=on; applyVol(); },
@@ -614,7 +699,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610211745';
+const BUILD = '202610212141';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -910,7 +995,7 @@ const SFX = (()=>{
   const ok = ()=>Sound.ready;
   return {
     hit(power, zone){ if(!ok()) return; Sound.stomp(0.35+0.5*power); Sound.slap(power, zone); },
-    fall(){ if(!ok()) return; Sound.stomp(1.3); setTimeout(()=>Sound.stomp(0.6), 140); },
+    fall(){ if(!ok()) return; Sound.fall(); },
     sweep(d, f0, f1, g){ if(ok()) Sound.sweep(d, f0, f1, g); },
     knock(){ if(ok()) Sound.knock(); },
     gong(){ if(ok()) Sound.gong(); },
@@ -1162,7 +1247,7 @@ class Fighter {
     this.play('knockdown', {fade:0.08, ts:1.1});
     this.lockFrom = now; this.lockUntil = now + 99;
     setTimeout(()=>SFX.fall(), 900);
-    Sound.ready && Sound.kiai('long', 0.9, this.voice);
+    Sound.ready && Sound.kiai('fall', 0.95, this.voice);
   }
   knock(dist, from){ const dir = Math.sign(this.x - from.x) || this.side; this.slide = {from:this.x, to:clampX(this.x + dir*dist), t0:duel.time, d:0.22}; }
   update(dt, now){
@@ -1391,7 +1476,7 @@ async function enterDuel(){
   D.loading = Promise.all([fetchChar(pKey), fetchChar(cKey)]);
   D.pKey = pKey; D.cKey = cKey;
   setNames(); buildPad(); hud();
-  SFX.roll();
+  Sound.setMusic('build'); SFX.roll();
   D.timeline = buildTimeline();
 }
 function setNames(){
@@ -1403,9 +1488,9 @@ function buildTimeline(){
   // [start, end, fn(k)] — k runs 0..1 over the span; fired cues run once
   const P = duel.arena.userData.parts, T = [];
   T.push([0, 1.6, k=>{ for (const t of P.tiles){ const s = Math.min(1, Math.max(0, k*6 - t.userData.order*0.9)); t.scale.x = Math.max(0.0001, ease(s)); } P.edge.scale.x = Math.max(0.0001, ease(k)); }]);
-  T.push([0.05, 0.05, ()=>SFX.sweep(1.5, 180, 900, 0.5)]);
+  T.push([0.05, 0.05, ()=>{ if (Sound.ready){ Sound.sfx('roll', {gain:0.9, wet:0.3}); Sound.sweep(1.5, 180, 900, 0.25); } }]);
   T.push([1.4, 3.1, k=>{ for (const w of P.walls){ const s = Math.min(1, Math.max(0, k*2.2 - w.userData.order*0.16)); w.visible = s > 0; w.position.y = -2.6 + 2.6*ease(s); } }]);
-  T.push([1.45, 1.45, ()=>SFX.sweep(1.6, 90, 320, 0.6)]);
+  T.push([1.45, 1.45, ()=>{ if (Sound.ready){ Sound.sfx('taikoBig', {gain:0.9, wet:0.4}) || Sound.sweep(1.6, 90, 320, 0.6); Sound.sweep(1.6, 90, 320, 0.25); } }]);
   T.push([2.6, 3.4, k=>{ duel.hemi.intensity = 0.35*k; for (const w of P.walls) w.children[0].material.emissiveIntensity = 0.28*k; P.scroll.scale.y = Math.max(0.0001, ease(Math.min(1, k*1.4))); }]);
   T.push([3.0, 4.3, k=>{ P.beams.forEach((b,i)=>{ const s = Math.min(1, Math.max(0, k*2 - i*0.22)); const from = i%2 ? 9 : -9; b.position.x = from*(1-ease(s)); }); }]);
   [3.2,3.45,3.7,3.95,4.2].forEach(t=>T.push([t, t, ()=>SFX.knock()]));
@@ -1429,14 +1514,15 @@ async function spawnFighters(){
   // light pillars
   D.pillars = [D.p, D.c].map(f=>{ const m = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 3.3, 24, 1, true), new THREE.MeshBasicMaterial({color:0xffd08a, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide}));
     m.position.set(f.x, 1.65, 0); scene.add(m); return m; });
-  if (Sound.ready){ Sound.sweep(0.9, 300, 2400, 0.45); setTimeout(()=>Sound.gong(), 650); }
+  if (Sound.ready){ Sound.sfx('taiko', {gain:0.9, wet:0.3}) || Sound.sweep(0.9, 300, 2400, 0.45); Sound.sweep(0.9, 300, 2400, 0.2); }
   hud();
 }
 function startBow(){
   controls.enabled = true;
   const D = duel; D.phase = 'bow';
   for (const f of [D.p, D.c]){ f.state = 'bow'; f.play('bow', {fade:0.3, ts:1.35}); }
-  setTimeout(()=>{ if (duel!==D) return; banner('시작!', '始め'); Sound.ready && Sound.gong(); D.phase = 'fight';
+  setTimeout(()=>{ if (D.phase && duel===D && Sound.ready) Sound.sfx('clap', {gain:0.8, wet:0.35}) && setTimeout(()=>Sound.sfx('clap', {gain:0.8, wet:0.35}), 230); }, 900);
+  setTimeout(()=>{ if (duel!==D) return; banner('시작!', '始め'); Sound.ready && Sound.gong(); Sound.setMusic('fight'); D.phase = 'fight';
     for (const f of [D.p, D.c]){ if (f.state==='bow') f.idle(0.3); f.lockUntil = D.time + 0.3; }
     D.c.nextThink = D.time + 1.0; setTimeout(()=>banner('',''), 1100); }, 2300);
 }
@@ -1445,7 +1531,8 @@ function endDuel(winner){
   D.over = true; D.slowUntil = D.time + 1.2;
   const youWin = winner===D.p;
   banner('KO', youWin ? '승리' : '패배');
-  Sound.ready && setTimeout(()=>Sound.gong(), 400);
+  Sound.ready && setTimeout(()=>Sound.gong(true), 300);
+  if (youWin) setTimeout(()=>Sound.ready && Sound.sfx('horn', {gain:0.85, wet:0.3}), 1900);
   setTimeout(()=>{ if (duel!==D) return; if (winner.state==='idle' || winner.canAct(D.time)) { winner.state='bow'; winner.play('bow',{fade:.3, ts:1.2}); } }, 1800);
   setTimeout(()=>{ if (duel!==D) return; banner('',''); $('dResTitle').textContent = youWin ? '승리' : '패배';
     $('dResSub').textContent = `${CHARS[D.pKey].ko} ${Math.round(D.p.hp)} : ${Math.round(D.c.hp)} ${CHARS[D.cKey].ko} · ${Math.round(D.time - D.fightStart)}초`;
@@ -1459,7 +1546,7 @@ function leaveDuel(){
   (D.pillars||[]).forEach(m=>scene.remove(m));
   D.arena.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material){ if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
   $('dResult').classList.remove('on'); banner('','');
-  document.body.classList.remove('duel');
+  document.body.classList.remove('duel'); Sound.setMusic('practice');
   mat.visible = true; controls.enabled = true; setCamMode('auto');
   controls.minDistance = 1.2; controls.maxDistance = 9; controls.maxPolarAngle = Math.PI*0.53; controls.enablePan = true; camera.fov = 32; camera.updateProjectionMatrix();
   let k = 'armor'; try { k = localStorage.getItem('dojo-char') || 'armor'; } catch(_){}
