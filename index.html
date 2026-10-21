@@ -604,7 +604,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610211238';
+const BUILD = '202610211247';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -919,7 +919,7 @@ function fixClips(gltf){
   const fa = [0,1,2].filter(i=>i!==up), base = {};
   const ordered = idle ? [idle, ...gltf.animations.filter(c=>c!==idle)] : gltf.animations;
   for (const clip of ordered){
-    if (clip.name==='knockdown' || clip.name==='getup') continue;   // these keep their travel; the duel moves the root
+    if (clip.name==='knockdown' || clip.name==='getup' || clip.name==='stepfwd' || clip.name==='stepback') continue;   // these keep their travel; the duel moves the root
     for (const tr of clip.tracks){
       if (!/Hip(s)?\.position$/.test(tr.name)) continue;
       const v = tr.values, n = v.length/3;
@@ -1008,6 +1008,29 @@ function bodyContact(def, p){
   return null;
 }
 
+function measureSteps(gltf, f){
+  if (gltf.__steps) return gltf.__steps;
+  const out = {}, w = new THREE.Vector3(), rp = new THREE.Vector3();
+  const idle = gltf.animations.find(c=>c.name==='idle');
+  const it = idle && idle.tracks.find(t=>/Hip(s)?\.position$/.test(t.name));
+  let up = 1; if (it){ const v=it.values; up = [0,1,2].reduce((a,b)=>Math.abs(v[b])>Math.abs(v[a])?b:a, 0); }
+  for (const name of ['stepfwd','stepback']){
+    const act = f.actions[name], clip = gltf.animations.find(c=>c.name===name); if (!act || !clip) continue;
+    const dur = clip.duration, N = Math.max(2, Math.round(dur*60)), times = [], vals = [];
+    f.mixer.stopAllAction(); act.reset(); act.setEffectiveWeight(1); act.play();
+    f.root.updateMatrixWorld(true); f.root.getWorldPosition(rp);
+    for (let i=0;i<=N;i++){ const t = dur*i/N; act.time = t; f.mixer.update(0); f.root.updateMatrixWorld(true); f.hips.getWorldPosition(w); times.push(t); vals.push((w.x - rp.x)*f.face); }
+    const v0 = vals[0]; for (let i=0;i<vals.length;i++) vals[i] -= v0;
+    out[name] = {times, vals, dur};
+    const tr = clip.tracks.find(t=>/Hip(s)?\.position$/.test(t.name));
+    if (tr && it){ const v = tr.values; for (const ax of [0,1,2]) if (ax!==up){ const b = it.values[ax]; for (let k=0;k<v.length/3;k++) v[k*3+ax] = b; } }
+  }
+  f.mixer.stopAllAction();
+  gltf.__steps = out; return out;
+}
+function curveAt(c, t){ const n = c.times.length; if (t <= 0) return c.vals[0]; if (t >= c.dur) return c.vals[n-1];
+  const x = t/c.dur*(n-1), i = Math.floor(x), k = x - i; return c.vals[i]*(1-k) + c.vals[Math.min(n-1,i+1)]*k; }
+
 // ---------- fighter ----------
 const WALK_F = 1.05, WALK_B = 0.8, MIN_GAP = 0.5;
 class Fighter {
@@ -1020,6 +1043,7 @@ class Fighter {
     this.hips = findBone(this.root,'mixamorigHips','CC_Base_Hip');
     this.hb = Object.fromEntries(Object.entries(HB).map(([k,n])=>[k, findBone(this.root, ...n[0])]));
     this.sb = {}; for (const id of Object.keys(DM)) if (DM[id].type!=='def') this.sb[id] = strikeBonesFor(this.root, id);
+    this.steps = measureSteps(gltf, this);
     this.root.traverse(o=>{ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
     const pk = strikePeaks(this.root, this.mixer, this.actions, this.face);
     this.hits = pk.hits; this.reach = pk.reach;
@@ -1122,14 +1146,25 @@ class Fighter {
     // footwork: hold a direction to walk while free; the stance bounce speeds up as the feet move
     const free = this.canAct(now) && !this.slide;
     const moving = free && this.walk !== 0;
-    if (moving){
-      const fwd = this.walk === this.face, v = (fwd ? WALK_F : WALK_B) * dt;
+    const fwd = this.walk === this.face, stepName = fwd ? 'stepfwd' : 'stepback';
+    const useClip = moving && this.steps[stepName];
+    if (useClip && this.curName !== stepName){ this.play(stepName, {fade:0.12, loop:true}); this.stepPrev = 0; this.stepCount = 0; }
+    if (!moving && this.state==='idle' && (this.curName==='stepfwd' || this.curName==='stepback')) this.play('idle', {fade:0.2, loop:true});
+    if (moving && !useClip){                                     // no step clip: plain shuffle
+      const v = (fwd ? WALK_F : WALK_B) * dt;
       this.root.position.x = clampX(this.x + this.walk*v);
       this.stepAcc += v; if (this.stepAcc > 0.3){ this.stepAcc = 0; Sound.ready && Sound.step(0.3); }
     }
-    if (moving !== this.walking && this.state==='idle' && this.cur){ this.cur.timeScale = moving ? 1.7 : 1; }
     this.walking = moving;
     this.mixer.update(dt);
+    if (useClip && this.curName === stepName){
+      // move the body exactly as far as the feet carry it in the clip, so nothing slides
+      const c = this.steps[stepName], t = this.cur.time;
+      let d = t >= this.stepPrev ? curveAt(c, t) - curveAt(c, this.stepPrev) : (curveAt(c, c.dur) - curveAt(c, this.stepPrev)) + (curveAt(c, t) - c.vals[0]);
+      if (t < this.stepPrev){ Sound.ready && Sound.step(0.35); }
+      this.stepPrev = t;
+      this.root.position.x = clampX(this.x + this.face*d);
+    }
     if (this.cur && this.events.length){
       const t = this.cur.time; if (t < this.lastT) this.lastT = -1;
       for (const e of this.events) if (e.t > this.lastT && e.t <= t){ try { e.f(); } catch(err){ console.error(err); } }
