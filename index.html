@@ -146,6 +146,10 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
 .d-state{font-size:11px;color:var(--muted);min-height:14px}
 .d-mid{display:grid;justify-items:center;gap:2px;pointer-events:auto}
 .d-mid .vs{font-family:var(--f-display);font-size:22px;color:var(--amber);line-height:1}
+.d-cam{display:flex;border:1px solid var(--line-2);border-radius:999px;overflow:hidden;background:rgba(18,20,23,.75)}
+.d-cam button{all:unset;cursor:pointer;font-size:11px;padding:5px 8px;color:var(--muted);white-space:nowrap}
+.d-cam button[aria-pressed="true"]{background:var(--amber);color:var(--ink);font-weight:600}
+.d-cam button:focus-visible{outline:2px solid var(--fg);outline-offset:-2px}
 .d-exit{all:unset;cursor:pointer;font-size:11px;padding:5px 9px;border-radius:999px;border:1px solid var(--line-2);color:var(--muted);background:rgba(18,20,23,.7)}
 .d-exit:focus-visible{outline:2px solid var(--amber)}
 
@@ -232,7 +236,13 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
           <div class="d-post" id="dPostLw"><i id="dPostL"></i></div>
           <div class="d-state" id="dStateL">준비</div>
         </div>
-        <div class="d-mid"><span class="vs">VS</span><button type="button" class="d-exit" id="dExit">연습 모드로</button></div>
+        <div class="d-mid"><span class="vs">VS</span>
+          <div class="d-cam" role="group" aria-label="시점">
+            <button type="button" data-dcam="auto" aria-pressed="true">기본</button>
+            <button type="button" data-dcam="free" aria-pressed="false">자유</button>
+            <button type="button" data-dcam="eye" aria-pressed="false">내 눈</button>
+          </div>
+          <button type="button" class="d-exit" id="dExit">연습 모드로</button></div>
         <div class="d-side r">
           <div class="d-name"><em id="dLvl">CPU · 보통</em><span id="dNameR">퓨처리스틱 걸</span></div>
           <div class="d-hp"><s id="dHpRs"></s><i id="dHpR"></i></div>
@@ -249,7 +259,7 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
           </div>
           <div class="d-acts" id="dKeys"></div>
         </div>
-        <div class="d-legend"><span>◀ ▶ 누르고 있으면 이동 · 버튼 아래 선: 다시 쓸 수 있을 때까지</span><span>● 큰 기술</span></div>
+        <div class="d-legend"><span>◀ ▶ 누르고 있으면 이동 · 화면을 끌면 회전, 두 손가락으로 확대</span><span>● 큰 기술</span></div>
       </div>
       <div class="d-result" id="dResult">
         <div class="d-card">
@@ -604,7 +614,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610211247';
+const BUILD = '202610211724';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -1356,7 +1366,8 @@ async function enterDuel(){
   // park practice mode
   if (charRoot){ scene.remove(charRoot); if (mixer){ mixer.stopAllAction(); } }
   mixer = null; current = null; idleAct = null; charKey = null; charRoot = null;
-  mat.visible = false; controls.enabled = false; setAuto(false);
+  mat.visible = false; controls.enabled = false; setAuto(false); setCamMode('auto');
+  controls.minDistance = 0.8; controls.maxDistance = 12; controls.maxPolarAngle = Math.PI*0.49; controls.enablePan = false;
   const D = duel = {time:0, phase:'build', over:false, slowUntil:0};
   sizePad();
   const arena = buildArena(); scene.add(arena); D.arena = arena;
@@ -1409,6 +1420,7 @@ async function spawnFighters(){
   hud();
 }
 function startBow(){
+  controls.enabled = true;
   const D = duel; D.phase = 'bow';
   for (const f of [D.p, D.c]){ f.state = 'bow'; f.play('bow', {fade:0.3, ts:1.35}); }
   setTimeout(()=>{ if (duel!==D) return; banner('시작!', '始め'); Sound.ready && Sound.gong(); D.phase = 'fight';
@@ -1435,7 +1447,8 @@ function leaveDuel(){
   D.arena.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material){ if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
   $('dResult').classList.remove('on'); banner('','');
   document.body.classList.remove('duel');
-  mat.visible = true; controls.enabled = true;
+  mat.visible = true; controls.enabled = true; setCamMode('auto');
+  controls.minDistance = 1.2; controls.maxDistance = 9; controls.maxPolarAngle = Math.PI*0.53; controls.enablePan = true; camera.fov = 32; camera.updateProjectionMatrix();
   let k = 'armor'; try { k = localStorage.getItem('dojo-char') || 'armor'; } catch(_){}
   loadCharacter(CHARS[k] ? k : 'armor');
 }
@@ -1491,10 +1504,50 @@ function duelUpdate(dt){
   const ty = 0.95 - ((D.padF||0.15) - (D.topF||0.08))/2 * Vs;        // body centre lands in the band centre
   const want = new THREE.Vector3(mid*0.8, ty + 0.22, dist), tgt = new THREE.Vector3(mid*0.8, ty, 0);
   const kc = D.phase==='build' ? Math.min(1, now/1.2) : 1;
+  const mode = (D.phase==='build') ? 'auto' : camMode;
+  if (mode==='eye' && D.p){ eyeCam(D, dt); return; }
+  setFov(32, dt);
+  if (mode==='free'){
+    // the orbit stays centred on the fight: carry camera and pivot along as the fighters move
+    const k = 1 - Math.pow(0.05, dt);
+    const shift = new THREE.Vector3(tgt.x - controls.target.x, 0.98 - controls.target.y, 0 - controls.target.z).multiplyScalar(k);
+    camera.position.add(shift); controls.target.add(shift);
+    controls.update();
+    return;
+  }
   if (kc < 1){ camera.position.lerpVectors(D.camFrom, want, ease(kc)); controls.target.lerpVectors(D.tgtFrom, tgt, ease(kc)); }
   else { camera.position.lerp(want, 1 - Math.pow(0.02, dt)); controls.target.lerp(tgt, 1 - Math.pow(0.02, dt)); }
   camera.lookAt(controls.target);
 }
+
+// ---------- duel camera modes ----------
+let camMode = 'auto';
+const _eh = new THREE.Vector3(), _ot = new THREE.Vector3(), _look = new THREE.Vector3(), _eye = new THREE.Vector3();
+function setFov(f, dt){ if (Math.abs(camera.fov - f) > 0.05){ camera.fov += (f - camera.fov)*(1 - Math.pow(0.002, dt)); camera.updateProjectionMatrix(); } }
+function eyeCam(D, dt){
+  // from just in front of my fighter's face, looking at the opponent's upper body
+  const me = D.p, op = D.c, head = me.hb.head, oh = op.hb.head || op.hips;
+  if (!head || !oh) return;
+  head.getWorldPosition(_eh); oh.getWorldPosition(_ot); _ot.y -= 0.18;
+  _eye.copy(_eh); _eye.y += 0.08; _eye.x += me.face*0.03;     // eye level inside the head; the near plane trims my own face away
+  const k = 1 - Math.pow(0.0005, dt);                      // follow the head closely but keep the view steady
+  camera.position.lerp(_eye, D.eyeInit ? k : 1);
+  _look.copy(_ot);
+  if (!D.eyeInit){ D.eyeLook = _look.clone(); D.eyeInit = true; }
+  D.eyeLook.lerp(_look, 1 - Math.pow(0.01, dt));
+  controls.target.copy(D.eyeLook);
+  camera.lookAt(D.eyeLook);
+  setFov(76, dt);
+}
+function setCamMode(m){
+  camMode = m;
+  document.querySelectorAll('[data-dcam]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.dcam===m));
+  if (duel){ duel.eyeInit = false; }
+  if (m!=='eye'){ camera.near = 0.05; camera.updateProjectionMatrix(); } else { camera.near = 0.13; camera.updateProjectionMatrix(); }
+}
+document.querySelectorAll('[data-dcam]').forEach(b=>b.addEventListener('click', ()=>{ setCamMode(b.dataset.dcam); if (b.dataset.dcam==='free' && duel){ controls.update(); } }));
+// touching the view (drag to orbit, pinch to zoom) switches to the free camera from wherever it is
+controls.addEventListener('start', ()=>{ if (duel && duel.phase!=='build' && camMode!=='free'){ if (camMode==='eye'){ const d = new THREE.Vector3().subVectors(controls.target, camera.position).setLength(2.4); controls.target.copy(camera.position).add(d); } setCamMode('free'); } });
 
 // ---------- HUD and controls ----------
 let hudT = 0;
