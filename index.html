@@ -614,7 +614,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610211724';
+const BUILD = '202610211745';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -1054,6 +1054,19 @@ class Fighter {
     this.hb = Object.fromEntries(Object.entries(HB).map(([k,n])=>[k, findBone(this.root, ...n[0])]));
     this.sb = {}; for (const id of Object.keys(DM)) if (DM[id].type!=='def') this.sb[id] = strikeBonesFor(this.root, id);
     this.steps = measureSteps(gltf, this);
+    this.clip = {on:{value:0}, c:{value:new THREE.Vector3()}, r:{value:0.33}};
+    const clip = this.clip, seen = new Set();
+    this.root.traverse(o=>{ if (!o.isMesh) return; for (const m of (Array.isArray(o.material)?o.material:[o.material])){
+      if (seen.has(m)) continue; seen.add(m);
+      m.onBeforeCompile = sh=>{
+        sh.uniforms.uClipOn = clip.on; sh.uniforms.uClipC = clip.c; sh.uniforms.uClipR = clip.r;
+        sh.vertexShader = 'varying vec3 vClipW;\n' + sh.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n vClipW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        sh.fragmentShader = 'uniform float uClipOn; uniform vec3 uClipC; uniform float uClipR; varying vec3 vClipW;\n' +
+          sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (uClipOn > 0.5 && distance(vClipW, uClipC) < uClipR) discard;');
+      };
+      m.customProgramCacheKey = ()=>'dojo-headclip';
+      m.needsUpdate = true;
+    } });
     this.root.traverse(o=>{ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
     const pk = strikePeaks(this.root, this.mixer, this.actions, this.face);
     this.hits = pk.hits; this.reach = pk.reach;
@@ -1442,7 +1455,7 @@ function leaveDuel(){
   const D = duel; if (!D) return;
   duel = null;
   scene.remove(D.arena); scene.remove(D.hemi);
-  for (const f of [D.p, D.c]) if (f){ f.mixer.stopAllAction(); scene.remove(f.root); f.root.scale.setScalar(1); f.root.position.set(0,0,0); f.root.rotation.set(0,0,0); }
+  for (const f of [D.p, D.c]) if (f){ f.clip.on.value = 0; f.mixer.stopAllAction(); scene.remove(f.root); f.root.scale.setScalar(1); f.root.position.set(0,0,0); f.root.rotation.set(0,0,0); }
   (D.pillars||[]).forEach(m=>scene.remove(m));
   D.arena.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material){ if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
   $('dResult').classList.remove('on'); banner('','');
@@ -1456,7 +1469,7 @@ function restartDuel(){ const keep = Object.assign({}, dSet); leaveDuelQuiet(); 
 function leaveDuelQuiet(){
   const D = duel; if (!D) return; duel = null;
   scene.remove(D.arena); scene.remove(D.hemi);
-  for (const f of [D.p, D.c]) if (f){ f.mixer.stopAllAction(); scene.remove(f.root); f.root.scale.setScalar(1); f.root.rotation.set(0,0,0); f.root.position.set(0,0,0); }
+  for (const f of [D.p, D.c]) if (f){ f.clip.on.value = 0; f.mixer.stopAllAction(); scene.remove(f.root); f.root.scale.setScalar(1); f.root.rotation.set(0,0,0); f.root.position.set(0,0,0); }
   (D.pillars||[]).forEach(m=>scene.remove(m));
   $('dResult').classList.remove('on');
 }
@@ -1529,9 +1542,12 @@ function eyeCam(D, dt){
   const me = D.p, op = D.c, head = me.hb.head, oh = op.hb.head || op.hips;
   if (!head || !oh) return;
   head.getWorldPosition(_eh); oh.getWorldPosition(_ot); _ot.y -= 0.18;
-  _eye.copy(_eh); _eye.y += 0.08; _eye.x += me.face*0.03;     // eye level inside the head; the near plane trims my own face away
-  const k = 1 - Math.pow(0.0005, dt);                      // follow the head closely but keep the view steady
+  _eye.copy(_eh); _eye.y += 0.08; _eye.x += me.face*0.03;     // eye level inside the head
+  const k = 1 - Math.pow(1e-6, dt);                        // stick to the head; a lagging camera would see my own face
   camera.position.lerp(_eye, D.eyeInit ? k : 1);
+  if (camera.position.distanceTo(_eye) > 0.08) camera.position.copy(_eye).addScaledVector(_look.subVectors(camera.position, _eye).normalize(), 0.08);
+  // never draw my own head and hair from inside: clip a sphere around the eyes in my fighter's shader
+  me.clip.on.value = 1; me.clip.c.value.copy(_eh).setY(_eh.y + 0.08);
   _look.copy(_ot);
   if (!D.eyeInit){ D.eyeLook = _look.clone(); D.eyeInit = true; }
   D.eyeLook.lerp(_look, 1 - Math.pow(0.01, dt));
@@ -1541,6 +1557,7 @@ function eyeCam(D, dt){
 }
 function setCamMode(m){
   camMode = m;
+  if (duel && duel.p && m!=='eye') duel.p.clip.on.value = 0;
   document.querySelectorAll('[data-dcam]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.dcam===m));
   if (duel){ duel.eyeInit = false; }
   if (m!=='eye'){ camera.near = 0.05; camera.updateProjectionMatrix(); } else { camera.near = 0.13; camera.updateProjectionMatrix(); }
