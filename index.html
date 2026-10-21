@@ -157,7 +157,17 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
 .d-pad{position:absolute;z-index:4;left:0;right:0;bottom:0;padding-top:8px;padding-bottom:max(8px,env(safe-area-inset-bottom,0px));
   padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));
   background:linear-gradient(transparent,rgba(12,10,9,.88) 22%);}
-.d-pad-in{max-width:820px;margin:0 auto;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.d-pad-in{max-width:900px;margin:0 auto;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:stretch}
+.d-move{display:flex;gap:5px}
+.d-mv{all:unset;box-sizing:border-box;cursor:pointer;width:clamp(48px,12vw,80px);border-radius:12px;display:grid;place-items:center;align-content:center;gap:2px;
+  background:#2a2621;border:1px solid #6b5640;color:var(--fg);touch-action:none;user-select:none;-webkit-user-select:none}
+.d-mv span{font-size:clamp(18px,5vw,26px);line-height:1}
+.d-mv small{font-size:10px;color:var(--muted)}
+.d-mv.on{background:#3d3020;border-color:var(--amber)}
+.d-mv:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.d-acts{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.d-acts .d-key{order:var(--o7)}
+@media (max-width:620px){ .d-acts{grid-template-columns:repeat(5,minmax(0,1fr))} .d-acts .d-key{order:var(--o5)} .d-key{height:clamp(38px,5.4vh,46px)} }
 .d-key{all:unset;box-sizing:border-box;cursor:pointer;position:relative;overflow:hidden;min-width:0;height:clamp(40px,6.2vh,52px);border-radius:8px;
   display:grid;place-items:center;align-content:center;gap:1px;text-align:center;
   background:#24211f;border:1px solid #4a3f37;color:var(--fg);touch-action:manipulation;user-select:none;-webkit-user-select:none}
@@ -232,8 +242,14 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
       </div>
       <div class="d-banner" id="dBanner"></div>
       <div class="d-pad" id="dPad">
-        <div class="d-pad-in" id="dKeys"></div>
-        <div class="d-legend"><span>위 게이지: 자세 회복 · 버튼 아래 선: 다시 쓸 수 있을 때까지</span><span>● 큰 기술</span></div>
+        <div class="d-pad-in">
+          <div class="d-move" role="group" aria-label="이동">
+            <button type="button" class="d-mv" id="dmL" aria-label="왼쪽으로 이동"><span>◀</span><small>후퇴</small></button>
+            <button type="button" class="d-mv" id="dmR" aria-label="오른쪽으로 이동"><span>▶</span><small>전진</small></button>
+          </div>
+          <div class="d-acts" id="dKeys"></div>
+        </div>
+        <div class="d-legend"><span>◀ ▶ 누르고 있으면 이동 · 버튼 아래 선: 다시 쓸 수 있을 때까지</span><span>● 큰 기술</span></div>
       </div>
       <div class="d-result" id="dResult">
         <div class="d-card">
@@ -588,7 +604,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610210825';
+const BUILD = '202610211238';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -726,7 +742,7 @@ function analyse(root){
   if (limbs.hand.length<2 || limbs.foot.length<2) console.warn('strike analysis: limbs not found', limbs.hand.length, limbs.foot.length);
   const v = new THREE.Vector3();
   for (const [id,act] of Object.entries(actions)){
-    if (id==='idle'||id==='bow') continue;
+    if (id==='idle'||id==='bow'||!byId[id]) continue;   // reaction clips (duel only) have no practice button
     const dur = act.getClip().duration, dt = 1/30, N = Math.floor(dur/dt);
     mixer.stopAllAction(); act.reset(); act.setEffectiveWeight(1); act.play();
     const prev = {}, series = [];
@@ -755,6 +771,7 @@ function analyse(root){
 }
 const KIAI = {jab:'short',cross:'short',hook:'short',combo4:'short',elbow:'long',frontkick:'iyap',roundhouse:'iyap',sidekick:'long',spinback:'iyap',lowkick:'short',knee:'iyap',bodyonetwo:'short'};
 function buildEvents(id){
+  if (!byId[id]) return [];
   const g = byId[id].g, dur = actions[id].getClip().duration, all = FX[id]||[];
   const want = g==='punch' ? 'hand' : g==='kick' ? 'foot' : null;
   const ev = [], pk = want && all.some(p=>p.limb===want) ? all.filter(p=>p.limb===want) : all;
@@ -867,6 +884,7 @@ const DM = {
   block:      {ko:'막기',      k:'Q', type:'def', cd:0.90, rest:0.20},
   dodge:      {ko:'피하기',    k:'W', type:'def', cd:2.20, rest:0.30},
 };
+const PAD5 = ['jab','cross','hook','combo4','elbow','bodyonetwo','frontkick','roundhouse','sidekick','spinback','lowkick','knee','block','dodge'];
 const PAD_ORDER = ['jab','cross','hook','combo4','elbow','bodyonetwo','block','frontkick','roundhouse','sidekick','spinback','lowkick','knee','dodge'];
 const DIFF = {
   easy:   {ko:'쉬움',   react:0.15, delay:0.32, think:[1.3,2.4], wait:0.35, punish:0.2},
@@ -915,21 +933,37 @@ function fixClips(gltf){
   }
   gltf.__fixed = true;
 }
-function strikePeaks(root, mixer, actions){
-  const hand = [findBone(root,'mixamorigLeftHand','CC_Base_L_Hand'), findBone(root,'mixamorigRightHand','CC_Base_R_Hand')].filter(Boolean);
-  const foot = [findBone(root,'mixamorigLeftToeBase','CC_Base_L_ToeBase'), findBone(root,'mixamorigRightToeBase','CC_Base_R_ToeBase')].filter(Boolean);
-  const v = new THREE.Vector3(), out = {};
+// strike bones per technique and their real reach, measured from the motion
+function boneSet(root, list){ return list.map(names=>findBone(root, ...names)).filter(Boolean); }
+const BN = {
+  hand:    [['mixamorigLeftHand','CC_Base_L_Hand'],['mixamorigRightHand','CC_Base_R_Hand']],
+  elbow:   [['mixamorigLeftForeArm','CC_Base_L_Forearm'],['mixamorigRightForeArm','CC_Base_R_Forearm']],
+  foot:    [['mixamorigLeftFoot','CC_Base_L_Foot'],['mixamorigRightFoot','CC_Base_R_Foot'],['mixamorigLeftToeBase','CC_Base_L_ToeBase'],['mixamorigRightToeBase','CC_Base_R_ToeBase']],
+  knee:    [['mixamorigLeftLeg','CC_Base_L_Calf'],['mixamorigRightLeg','CC_Base_R_Calf']],
+};
+// kicks land with the foot or the shin; the elbow strike with fist or forearm
+function strikeBonesFor(root, id){
+  if (id==='elbow') return boneSet(root, [...BN.hand, ...BN.elbow]);
+  if (id==='knee') return boneSet(root, BN.knee);
+  if (DM[id].type==='kick') return boneSet(root, [...BN.foot.slice(0,2), ...BN.knee]);
+  return boneSet(root, BN.hand);
+}
+function strikeSegs(id, n){ return (id==='elbow' || (DM[id].type==='kick' && id!=='knee')) && n===4 ? [[2,0],[3,1]] : []; }
+function strikePeaks(root, mixer, actions, face){
+  const v = new THREE.Vector3(), rp = new THREE.Vector3(), hits = {}, reach = {};
   for (const id of Object.keys(DM)){
     const act = actions[id]; if (!act || DM[id].type==='def') continue;
-    const want = DM[id].type==='punch' ? hand : foot;
+    const bones = strikeBonesFor(root, id);
     const dur = act.getClip().duration, dt = 1/30, N = Math.floor(dur/dt);
     mixer.stopAllAction(); act.reset(); act.setEffectiveWeight(1); act.play();
-    const prev = [], sp = [];
+    const prev = [], sp = [], fwd = [];
+    root.getWorldPosition(rp);
     for (let i=0;i<=N;i++){
       act.time = i*dt; mixer.update(0); root.updateMatrixWorld(true);
-      let s = 0;
-      want.forEach((b,j)=>{ b.getWorldPosition(v); if (prev[j]){ s = Math.max(s, v.distanceTo(prev[j])/dt); prev[j].copy(v); } else prev[j] = v.clone(); });
-      sp.push(s);
+      let s = 0, f = -9;
+      bones.forEach((b,j)=>{ b.getWorldPosition(v); f = Math.max(f, (v.x - rp.x)*face);
+        if (prev[j]){ s = Math.max(s, v.distanceTo(prev[j])/dt); prev[j].copy(v); } else prev[j] = v.clone(); });
+      sp.push(s); fwd.push(f);
     }
     const top = Math.max(...sp), thr = top*0.6, pk = [];
     for (let i=2;i<sp.length-2;i++){
@@ -939,28 +973,60 @@ function strikePeaks(root, mixer, actions){
       }
     }
     const multi = id==='combo4' ? 4 : (id==='elbow'||id==='bodyonetwo') ? 3 : 1;
-    let hits = pk.slice().sort((a,b)=>b.s-a.s).slice(0, multi).sort((a,b)=>a.t-b.t).map(p=>p.t);
-    if (!hits.length) hits = [dur*0.38];
-    out[id] = hits;
+    let ts = pk.slice().sort((a,b)=>b.s-a.s).slice(0, multi).sort((a,b)=>a.t-b.t).map(p=>p.t);
+    if (!ts.length) ts = [dur*0.38];
+    hits[id] = ts;
+    // furthest the striking limb gets in front of the feet during the active windows
+    let r = 0; for (const t of ts){ for (let i=Math.max(0,Math.floor((t-0.08)/dt)); i<=Math.min(N,Math.ceil((t+0.2)/dt)); i++) r = Math.max(r, fwd[i]); }
+    reach[id] = r;
   }
   mixer.stopAllAction();
-  return out;
+  return {hits, reach};
+}
+
+// body volumes the opponent can actually touch
+const HB = {
+  hips:[['mixamorigHips','CC_Base_Hip']], chest:[['mixamorigSpine2','CC_Base_Spine02']], head:[['mixamorigHead','CC_Base_Head']],
+  lthigh:[['mixamorigLeftUpLeg','CC_Base_L_Thigh']], lknee:[['mixamorigLeftLeg','CC_Base_L_Calf']], lfoot:[['mixamorigLeftFoot','CC_Base_L_Foot']],
+  rthigh:[['mixamorigRightUpLeg','CC_Base_R_Thigh']], rknee:[['mixamorigRightLeg','CC_Base_R_Calf']], rfoot:[['mixamorigRightFoot','CC_Base_R_Foot']],
+};
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
+function segDist(p, a, b){ _d.subVectors(b, a); const L = _d.lengthSq(); let t = L>0 ? _c.subVectors(p, a).dot(_d)/L : 0; t = Math.max(0, Math.min(1, t)); return p.distanceTo(_c.copy(a).addScaledVector(_d, t)); }
+function bodyContact(def, p){
+  const H = def.hb, W = k=>H[k] ? H[k].getWorldPosition(new THREE.Vector3()) : null;
+  const hips = W('hips'), chest = W('chest'), head = W('head');
+  if (!hips || !chest || !head) return null;
+  const headC = head.clone(); headC.y += 0.09;
+  const LIMB = 0.06;
+  if (p.distanceTo(headC) < 0.13 + LIMB || segDist(p, chest, head) < 0.1 + LIMB) return 'head';
+  if (segDist(p, hips, chest) < 0.18 + LIMB) return 'body';
+  for (const s of ['l','r']){
+    const th = W(s+'thigh'), kn = W(s+'knee'), ft = W(s+'foot');
+    if (th && kn && segDist(p, th, kn) < 0.11 + LIMB) return 'low';
+    if (kn && ft && segDist(p, kn, ft) < 0.09 + LIMB) return 'low';
+  }
+  return null;
 }
 
 // ---------- fighter ----------
+const WALK_F = 1.05, WALK_B = 0.8, MIN_GAP = 0.5;
 class Fighter {
   constructor(key, gltf, side, isCPU){
-    this.key = key; this.side = side; this.cpu = isCPU; this.voice = CHARS[key].voice;
+    this.key = key; this.side = side; this.cpu = isCPU; this.voice = CHARS[key].voice; this.face = -side;
     this.root = gltf.scene; this.root.rotation.set(0, side<0 ? Math.PI/2 : -Math.PI/2, 0);
     this.root.position.set(side*SPACING/2, 0, 0); this.root.scale.setScalar(1);
     this.mixer = new THREE.AnimationMixer(this.root);
     this.actions = {}; for (const c of gltf.animations) this.actions[c.name] = this.mixer.clipAction(c);
     this.hips = findBone(this.root,'mixamorigHips','CC_Base_Hip');
+    this.hb = Object.fromEntries(Object.entries(HB).map(([k,n])=>[k, findBone(this.root, ...n[0])]));
+    this.sb = {}; for (const id of Object.keys(DM)) if (DM[id].type!=='def') this.sb[id] = strikeBonesFor(this.root, id);
     this.root.traverse(o=>{ if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
-    this.hits = strikePeaks(this.root, this.mixer, this.actions);
+    const pk = strikePeaks(this.root, this.mixer, this.actions, this.face);
+    this.hits = pk.hits; this.reach = pk.reach;
     this.root.scale.setScalar(0.001);
     this.hp = 100; this.state = 'intro'; this.lockUntil = 0; this.lockFrom = 0; this.ready = {}; this.cur = null; this.curName = '';
-    this.events = []; this.lastT = -1; this.slide = null; this.invuln = false; this.move = null; this.queued = null; this.ko = false;
+    this.events = []; this.windows = []; this.lastT = -1; this.slide = null; this.invuln = false; this.move = null; this.queued = null; this.ko = false;
+    this.walk = 0; this.walking = false; this.stepAcc = 0; this.prevPts = null;
     this.mixer.addEventListener('finished', e=>{ if (e.action===this.cur) this.onFinished(); });
   }
   play(name, {fade=0.14, loop=false, ts=1}={}){
@@ -968,28 +1034,26 @@ class Fighter {
     a.reset(); a.enabled = true; a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
     a.clampWhenFinished = true; a.timeScale = ts; a.setEffectiveWeight(1); a.play();
     if (this.cur && this.cur!==a) this.cur.crossFadeTo(a, fade, false);
-    this.cur = a; this.curName = name; this.lastT = -1; this.events = [];
+    this.cur = a; this.curName = name; this.lastT = -1; this.events = []; this.windows = []; this.prevPts = null;
     return a;
   }
   idle(fade=0.25){ this.state = 'idle'; this.move = null; this.invuln = false; this.play('idle', {fade, loop:true}); }
   get x(){ return this.root.position.x; }
+  get bodyX(){ if (!this.hips) return this.x; return this.hips.getWorldPosition(_a).x; }
   canAct(now){ return this.state==='idle' && now >= this.lockUntil && !this.ko; }
   lock(now, sec){ this.lockFrom = now; this.lockUntil = Math.max(this.lockUntil, now + sec); }
   onFinished(){
     const now = duel.time, s = this.state;
-    if (s==='attack' || s==='block' || s==='dodge'){ const r = DM[this.move]?.rest ?? 0.25; this.idle(0.28); this.lock(now, r); this.postState = 'recover'; }
-    else if (s==='hit'){ this.idle(0.3); this.lock(now, 0.18); this.postState = 'recover'; }
-    else if (s==='falling'){
-      if (this.ko){ this.state = 'ko'; return; }
-      this.state = 'down'; this.downUntil = now + 0.7;
-    }
-    else if (s==='getup'){ this.idle(0.35); this.lock(now, 0.45); this.invuln = false; this.postState = 'recover'; }
+    if (s==='attack' || s==='block' || s==='dodge'){ const r = DM[this.move]?.rest ?? 0.25; this.idle(0.28); this.lock(now, r); }
+    else if (s==='hit'){ this.idle(0.3); this.lock(now, 0.18); }
+    else if (s==='falling'){ if (this.ko){ this.state = 'ko'; return; } this.state = 'down'; this.downUntil = now + 0.7; }
+    else if (s==='getup'){ this.idle(0.35); this.lock(now, 0.45); this.invuln = false; }
     else if (s==='bow' || s==='intro'){ this.idle(0.35); }
   }
   start(id, opp, now){
     const m = DM[id]; if (!m || !this.actions[id]) return false;
     if (!this.canAct(now) || now < (this.ready[id]||0)) return false;
-    this.ready[id] = now + m.cd; this.move = id; this.lockFrom = now;
+    this.ready[id] = now + m.cd; this.move = id; this.lockFrom = now; this.walking = false;
     const a = this.play(id, {fade:0.1});
     const dur = a.getClip().duration; this.lockUntil = now + dur + m.rest;
     if (m.type==='def'){
@@ -998,26 +1062,46 @@ class Fighter {
       return true;
     }
     this.state = 'attack';
-    // close the distance during the wind-up if the opponent is out of reach
-    const first = this.hits[id][0], gap = Math.abs(opp.x - this.x);
-    if (gap > m.reach*0.88){ const step = Math.min(gap - m.reach*0.82, 0.55); this.slide = {from:this.x, to:clampX(this.x + Math.sign(opp.x-this.x)*step), t0:now, d:Math.max(0.15, first*0.9)}; }
+    // step in during the wind-up, at most half a step; the limb still has to land
+    const first = this.hits[id][0], gap = Math.abs(opp.x - this.x), need = gap - (this.reach[id] + 0.12);
+    if (need > 0.02){ const step = Math.min(need, 0.4); this.slide = {from:this.x, to:clampX(this.x + this.face*step), t0:now, d:Math.max(0.15, first*0.85), lunge:true}; }
     const n = this.hits[id].length;
-    this.events = [];
     this.hits[id].forEach((t,i)=>{
       this.events.push({t:Math.max(0,t-0.08), f:()=>Sound.ready && Sound.whoosh(0.6+0.5*(m.dmg/18), m.type==='kick')});
       if (i===0 || m.heavy) this.events.push({t:Math.max(0,t-0.06), f:()=>Sound.ready && Sound.kiai(i===0 ? (m.heavy?'iyap':'short') : 'hut', 1, this.voice)});
-      this.events.push({t, f:()=>resolveHit(this, opp, id, m.dmg/n, i===n-1)});
+      this.windows.push({t0:Math.max(0,t-0.07), t1:t+0.22, i, last:i===n-1, dmg:m.dmg/n, done:false});
     });
     opp.onThreat && opp.onThreat(this, id, now + first);
     return true;
   }
-  takeHit(m, dmg, last, now, from){
+  // called every frame after poses are final: does the striking limb touch the opponent?
+  checkContact(opp){
+    if (this.state!=='attack' || !this.windows.length) return;
+    const bones = this.sb[this.move] || [], t = this.cur.time;
+    const pts = bones.map(b=>b.getWorldPosition(new THREE.Vector3()));
+    for (const [a,b] of strikeSegs(this.move, bones.length)) for (const f of [0.33, 0.66]) pts.push(new THREE.Vector3().lerpVectors(pts[a], pts[b], f));
+    for (const w of this.windows){
+      if (w.done || t < w.t0) continue;
+      let zone = null;
+      for (let j=0;j<pts.length && !zone;j++){
+        const p0 = this.prevPts ? this.prevPts[j] : pts[j];
+        for (let k=0;k<=3 && !zone;k++){ zone = bodyContact(opp, _b.lerpVectors(p0, pts[j], k/3)); }    // swept, so fast limbs can't skip through
+      }
+      // a kick aimed high that brushes the thigh on the way up still gets to land on its target
+      if (zone==='low' && DM[this.move].zone!=='low' && t <= w.t1){ w.low = true; zone = null; }
+      if (zone){ w.done = true; resolveHit(this, opp, this.move, w.dmg, w.last, zone); }
+      else if (t > w.t1){ w.done = true; if (w.low) resolveHit(this, opp, this.move, w.dmg, w.last, 'low'); else noteWhiff(this); }
+    }
+    this.prevPts = pts;
+  }
+  takeHit(m, dmg, last, now, from, zone){
     this.hp = Math.max(0, this.hp - dmg);
     const heavy = dmg >= 9 || m.heavy;
+    this.walking = false;
     if (this.hp <= 0){ this.ko = true; this.fall(now, true); return 'ko'; }
-    if (last && m.kd && Math.random() < m.kd * (this.hp < 40 ? 1.4 : 1)){ this.fall(now, false); return 'down'; }
+    if (last && m.kd && zone!=='low' && Math.random() < m.kd * (this.hp < 40 ? 1.4 : 1)){ this.fall(now, false); return 'down'; }
     this.state = 'hit'; this.move = null;
-    const clip = (m.zone==='head') ? 'hithead' : 'hitbody';
+    const clip = (zone==='head') ? 'hithead' : 'hitbody';
     const ts = heavy ? 1.0 : 1.3;
     const a = this.play(clip, {fade:0.06, ts});
     const stun = (a ? a.getClip().duration/ts : 0.8) + dmg*0.025;
@@ -1027,7 +1111,7 @@ class Fighter {
     return 'hit';
   }
   fall(now, ko){
-    this.state = 'falling'; this.move = null; this.invuln = true;
+    this.state = 'falling'; this.move = null; this.invuln = true; this.walking = false;
     this.play('knockdown', {fade:0.08, ts:1.1});
     this.lockFrom = now; this.lockUntil = now + 99;
     setTimeout(()=>SFX.fall(), 900);
@@ -1035,6 +1119,16 @@ class Fighter {
   }
   knock(dist, from){ const dir = Math.sign(this.x - from.x) || this.side; this.slide = {from:this.x, to:clampX(this.x + dir*dist), t0:duel.time, d:0.22}; }
   update(dt, now){
+    // footwork: hold a direction to walk while free; the stance bounce speeds up as the feet move
+    const free = this.canAct(now) && !this.slide;
+    const moving = free && this.walk !== 0;
+    if (moving){
+      const fwd = this.walk === this.face, v = (fwd ? WALK_F : WALK_B) * dt;
+      this.root.position.x = clampX(this.x + this.walk*v);
+      this.stepAcc += v; if (this.stepAcc > 0.3){ this.stepAcc = 0; Sound.ready && Sound.step(0.3); }
+    }
+    if (moving !== this.walking && this.state==='idle' && this.cur){ this.cur.timeScale = moving ? 1.7 : 1; }
+    this.walking = moving;
     this.mixer.update(dt);
     if (this.cur && this.events.length){
       const t = this.cur.time; if (t < this.lastT) this.lastT = -1;
@@ -1057,53 +1151,78 @@ class Fighter {
       case 'falling': case 'down': return '다운'; case 'getup': return '일어나는 중';
       case 'ko': return 'KO';
     }
-    return now < this.lockUntil ? '자세 고치는 중' : '준비됨';
+    if (now < this.lockUntil) return '자세 고치는 중';
+    return this.walking ? (this.walk===this.face ? '전진' : '후퇴') : '준비됨';
   }
 }
 function clampX(x){ return Math.max(-ARENA_X, Math.min(ARENA_X, x)); }
 
-function resolveHit(att, def, id, dmg, last){
+// bodies can't overlap or pass: push apart by the overlap of both the feet and the real hip positions
+function separate(p, c){
+  const lying = f=>f.state==='falling'||f.state==='down'||f.state==='ko'||f.state==='getup';
+  let over = MIN_GAP - (c.x - p.x);
+  if (!lying(p) && !lying(c)) over = Math.max(over, (MIN_GAP - 0.06) - (c.bodyX - p.bodyX));
+  if (over <= 0) return;
+  // the one walking or lunging in gets stopped; otherwise both give way, never through a wall
+  const pPush = (p.walking && p.walk>0) || (p.slide && p.slide.lunge), cPush = (c.walking && c.walk<0) || (c.slide && c.slide.lunge);
+  let dp = pPush && !cPush ? over : !pPush && cPush ? 0 : over/2, dc = over - dp;
+  if (p.x - dp < -ARENA_X){ dc += (p.x - dp) + ARENA_X; dp = p.x + ARENA_X; }
+  if (c.x + dc > ARENA_X){ dp += (c.x + dc) - ARENA_X; dc = ARENA_X - c.x; }
+  p.root.position.x -= dp; c.root.position.x += dc;
+  if (p.slide && p.slide.lunge) p.slide = null; if (c.slide && c.slide.lunge) c.slide = null;
+}
+
+function noteWhiff(att){ const L = duel.log || (duel.log = []); L.push(`${att.cpu?'C':'P'}:${att.move}:whiff`); flash(att, '빗나감'); }
+function resolveHit(att, def, id, dmg, last, zone){
   if (!duel || duel.over) return;
-  const m = DM[id], now = duel.time, gap = Math.abs(def.x - att.x);
-  const L = duel.log || (duel.log = []); const note = r=>L.push(`${att.cpu?'C':'P'}:${id}:${r}:${gap.toFixed(2)}`);
-  if (gap > m.reach + 0.05){ note('whiff'); return; }                                   // whiff: only the swing sound
+  const m = DM[id], now = duel.time;
+  const L = duel.log || (duel.log = []); const note = r=>L.push(`${att.cpu?'C':'P'}:${id}:${r}:${zone}:${(def.x-att.x).toFixed(2)}`);
   if (def.invuln || def.ko){ note('invuln'); return; }
   if (def.state==='dodge'){ const t = def.cur.time; if (t > 0.05 && t < 0.75){ flash(def, '회피'); note('dodged'); return; } }
   if (def.state==='block'){
     const t = def.cur.time, guard = t > 0.08 && t < def.cur.getClip().duration*0.8;
-    if (guard && m.zone!=='low'){
+    if (guard && zone!=='low'){
       def.hp = Math.max(0, def.hp - dmg*0.15); def.knock(m.kb*0.6, att);
       def.lockUntil = Math.max(def.lockUntil, now + 0.25 + dmg*0.01);
       Sound.ready && Sound.clank(); flash(def, '막음'); note('blocked'); hud(); return;
     }
   }
   const counter = def.state==='attack' && def.cur && def.cur.time < (def.hits[def.move]?.[0] ?? 0);
-  const total = dmg * (counter ? 1.3 : 1);
-  const r = def.takeHit(m, total, last, now, att); note(r);
-  SFX.hit(Math.min(1, total/12), m.zone);
+  const total = dmg * (counter ? 1.3 : 1) * (zone==='head' ? 1.1 : zone==='low' ? 0.85 : 1);
+  const r = def.takeHit(m, total, last, now, att, zone); note(r);
+  SFX.hit(Math.min(1, total/12), zone);
   if (counter) flash(def, '카운터');
   hud();
   if (r==='ko') endDuel(att);
 }
 function flash(f, text){ const el = f.side<0 ? $('dStateL') : $('dStateR'); el.textContent = text; el.dataset.until = duel.time + 0.7; }
 
-// ---------- CPU ----------
+// ---------- CPU: picks a technique, walks into its real range, then throws it ----------
 function cpuThink(c, p, now){
   const D = DIFF[dSet.diff];
-  if (c.react && now >= c.react.at){ const r = c.react; c.react = null; if (c.canAct(now)) c.start(r.kind, p, now); }
-  if (!c.canAct(now)) return;
+  if (c.react && now >= c.react.at){ const r = c.react; c.react = null; if (c.canAct(now)){ c.walk = 0; c.start(r.kind, p, now); } }
+  if (!c.canAct(now)){ c.walk = 0; return; }
+  const gap = c.x - p.x;
+  if (c.backUntil && now < c.backUntil){ c.walk = +1; return; }
+  if (c.plan){
+    const want = c.reach[c.plan] + 0.12;
+    if (now > c.planUntil){ c.plan = null; c.walk = 0; }
+    else if (gap > want + 0.35){ c.walk = -1; return; }          // walk in until a short lunge covers the rest
+    else { c.walk = 0; const id = c.plan; c.plan = null; c.start(id, p, now); return; }
+  }
+  c.walk = 0;
   if (now < (c.nextThink||0)) return;
   c.nextThink = now + D.think[0] + Math.random()*(D.think[1]-D.think[0]);
-  if (Math.random() < D.wait) return;                          // breathe, watch, re-set the stance
+  if (gap < 0.62 && Math.random() < 0.45){ c.backUntil = now + 0.35 + Math.random()*0.3; return; }   // too close: reset the distance
+  if (Math.random() < D.wait) return;                          // breathe, watch
   const punish = (p.lockUntil - now > 0.7) && Math.random() < D.punish;
-  const gap = Math.abs(p.x - c.x);
   const pool = Object.keys(DM).filter(id=>DM[id].type!=='def' && c.actions[id] && now >= (c.ready[id]||0));
   if (!pool.length) return;
   const w = pool.map(id=>{ const m = DM[id]; let s = m.heavy ? (punish ? 3 : 0.6) : (punish ? 0.8 : 2.2);
-    if (gap > m.reach) s *= 0.6; if (id==='jab'||id==='lowkick') s *= 1.3; return s; });
+    if (id==='jab'||id==='lowkick') s *= 1.3; if (gap > c.reach[id] + 0.6) s *= 0.7; return s; });
   let r = Math.random()*w.reduce((a,b)=>a+b,0), pick = pool[0];
   for (let i=0;i<pool.length;i++){ r -= w[i]; if (r<=0){ pick = pool[i]; break; } }
-  c.start(pick, p, now);
+  c.plan = pick; c.planUntil = now + 2.2;
 }
 function cpuOnThreat(c){
   return (att, id, impactAt)=>{
@@ -1311,21 +1430,18 @@ function duelUpdate(dt){
     if (now - D.spawnAt > 1.4){ D.pillars.forEach(m=>scene.remove(m)); D.pillars = []; startBow(); }
   }
   if (D.p){
+    D.p.walk = D.phase==='fight' && !D.over ? moveDir : 0;
     D.p.update(dt*slow, now); D.c.update(dt*slow, now);
     if (D.phase==='fight' && !D.over){
       if (!D.fightStart) D.fightStart = now;
       if (D.p.queued && D.p.canAct(now)){ const q = D.p.queued; D.p.queued = null; D.p.start(q, D.c, now); }
       cpuThink(D.c, D.p, now);
-      // re-set the stance: drift back to fighting distance while both are idle
-      const gap = D.c.x - D.p.x;
-      if (Math.abs(gap - SPACING) > 0.04){
-        const dir = Math.sign(gap - SPACING), v = 0.55*dt;
-        if (D.p.state==='idle' && !D.p.slide) D.p.root.position.x = clampX(D.p.x + dir*v*0.5);
-        if (D.c.state==='idle' && !D.c.slide) D.c.root.position.x = clampX(D.c.x - dir*v*0.5);
-        D.stepAcc = (D.stepAcc||0) + v; if (D.stepAcc > 0.22){ D.stepAcc = 0; Sound.ready && Sound.step(0.25); }
-      }
-      if (D.c.x - D.p.x < 0.72){ const mid = (D.c.x + D.p.x)/2; D.p.root.position.x = mid - 0.36; D.c.root.position.x = mid + 0.36; }
     }
+    // final poses for this frame, then: no overlap, and strikes count only on real contact
+    D.p.root.updateMatrixWorld(true); D.c.root.updateMatrixWorld(true);
+    separate(D.p, D.c);
+    D.p.root.updateMatrixWorld(true); D.c.root.updateMatrixWorld(true);
+    if (D.phase==='fight' && !D.over){ D.p.checkContact(D.c); D.c.checkContact(D.p); }
     hud(true);
   }
   // camera: side view that keeps both fighters framed above the control pad
@@ -1376,6 +1492,7 @@ function buildPad(){
     const m = DM[id], b = document.createElement('button');
     b.type = 'button'; b.className = 'd-key ' + (m.type==='def' ? 'def' : m.type==='kick' ? 'kick' : '') + (m.heavy ? ' heavy' : '');
     b.id = 'dk-'+id; b.innerHTML = `<i></i><b>${m.ko}</b><small>${m.k}</small><u></u>`;
+    b.style.setProperty('--o7', PAD_ORDER.indexOf(id)); b.style.setProperty('--o5', PAD5.indexOf(id));
     b.setAttribute('aria-label', m.ko);
     b.addEventListener('pointerdown', e=>{ e.preventDefault(); press(id); });
     b.addEventListener('keydown', e=>{ if (e.key==='Enter'||e.key===' '){ e.preventDefault(); press(id); } });
@@ -1408,6 +1525,18 @@ $('dAgain').onclick = ()=>restartDuel();
 $('dLeave').onclick = ()=>leaveDuel();
 $('dExit').onclick = ()=>leaveDuel();
 $('duelGo').onclick = ()=>enterDuel();
+// footwork pad (hold) and arrow / A-D keys
+let moveDir = 0; const held = {l:false, r:false};
+function syncMove(){ moveDir = (held.r?1:0) - (held.l?1:0); document.getElementById('dmL')?.classList.toggle('on', held.l); document.getElementById('dmR')?.classList.toggle('on', held.r); }
+for (const [id, k] of [['dmL','l'],['dmR','r']]){
+  const b = document.getElementById(id);
+  b.addEventListener('pointerdown', e=>{ e.preventDefault(); Sound.start(); try { b.setPointerCapture(e.pointerId); } catch(_){} held[k] = true; syncMove(); });
+  for (const ev of ['pointerup','pointercancel','lostpointercapture']) b.addEventListener(ev, ()=>{ held[k] = false; syncMove(); });
+  b.addEventListener('contextmenu', e=>e.preventDefault());
+}
+addEventListener('keydown', e=>{ if (!duel) return; const k = e.key.toLowerCase(); if (k==='arrowleft'||k==='a'){ held.l = true; syncMove(); e.preventDefault(); } if (k==='arrowright'||k==='d'){ held.r = true; syncMove(); e.preventDefault(); } }, true);
+addEventListener('keyup', e=>{ const k = e.key.toLowerCase(); if (k==='arrowleft'||k==='a'){ held.l = false; syncMove(); } if (k==='arrowright'||k==='d'){ held.r = false; syncMove(); } });
+addEventListener('blur', ()=>{ held.l = held.r = false; syncMove(); });
 const DKEYS = Object.fromEntries(Object.entries(DM).map(([id,m])=>[m.k.toLowerCase(), id]));
 addEventListener('keydown', e=>{ if (!duel) return; const id = DKEYS[e.key.toLowerCase()]; if (id){ e.preventDefault(); e.stopImmediatePropagation(); press(id); } }, true);
 Object.defineProperties(window.__dojo, {duel:{get:()=>duel}, dset:{get:()=>dSet}});
