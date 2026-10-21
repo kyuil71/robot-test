@@ -519,12 +519,13 @@ const Sound = (()=>{
     clank: v5('sfx/block_clank',2), step: v5('sfx/step',3), stomp: v5('sfx/stomp',2), fall: ['sfx/body_fall_01'],
     gong: ['sfx/gong_01'], gongBig: ['sfx/gong_02'], knock: v5('sfx/knock_wood',2), drumroll: ['sfx/drum_roll_01'], roll: ['sfx/roll_01'],
     taikoBig: ['sfx/taiko_hit_01'], taiko: ['sfx/taiko_hit_02','sfx/taiko_hit_03'], clap: ['sfx/clap_01'], horn: ['sfx/victory_horn_01'],
+    // only pure shouts and screams: every take with words in it was left out of the pack
     // armor suit: male kiai heard through the helmet
-    'm.short': v5('voice/kiai_male_short',5), 'm.long': v5('voice/kiai_male_long',2), 'm.ugh': ['voice/scream_male_04','voice/scream_male_05'], 'm.fall': ['voice/scream_male_02','voice/scream_male_03'],
-    // realistic fighter: the deep male set (plus the male set pitched down)
-    'h.short': ['voice/kiai_deepmale_short_01','voice/kiai_male_short_02','voice/kiai_male_short_04'], 'h.long': v5('voice/kiai_deepmale_long',2), 'h.ugh': ['voice/scream_male_05','voice/scream_male_03'], 'h.fall': ['voice/scream_male_01','voice/scream_male_02'],
+    'm.short': v5('voice/kiai_male_short',5), 'm.long': v5('voice/kiai_male_short',5), 'm.ugh': ['voice/scream_male_04','voice/scream_male_05'], 'm.fall': ['voice/scream_male_02','voice/scream_male_03'],
+    // realistic fighter: the same pure male shouts, pitched down for a deeper voice
+    'h.short': v5('voice/kiai_male_short',5), 'h.long': v5('voice/kiai_male_short',5), 'h.ugh': ['voice/scream_male_05','voice/scream_male_03'], 'h.fall': ['voice/scream_male_01','voice/scream_male_02'],
     // futuristic girl
-    'f.short': v5('voice/kiai_female_short',3), 'f.long': v5('voice/kiai_female_long',3), 'f.ugh': ['voice/scream_female_04','voice/scream_female_05'], 'f.fall': v5('voice/scream_female',3),
+    'f.short': v5('voice/kiai_female_short',3), 'f.long': v5('voice/kiai_female_short',3), 'f.ugh': ['voice/scream_female_04','voice/scream_female_05'], 'f.fall': ['voice/scream_female_01','voice/scream_female_02'],
   };
   const buf = {}; let packLoading = false;
   function loadPack(){
@@ -569,9 +570,10 @@ const Sound = (()=>{
     if (!ctx) return; const vv = v || voice, now = ctx.currentTime;
     if (now - (lastVox[vv]||0) < 0.22) return;
     const key = vv + '.' + (KMAP[kind] || 'short');
-    const ok = smp(key, {gain:(kind==='hut' ? 0.6 : 0.95) * Math.min(power, 1.2), bus:voxBus, wet:vv==='m' ? 0.18 : 0.12,
+    const big = KMAP[kind]==='long', pain = KMAP[kind]==='ugh' || KMAP[kind]==='fall';
+    const ok = smp(key, {gain:(kind==='hut' ? 0.6 : big ? 1.05 : 0.95) * Math.min(power, 1.2), bus:voxBus, wet:(vv==='m' ? 0.18 : 0.12) + (big ? 0.12 : 0),
       filter: vv==='m' ? helmet() : null,
-      rateFor: n=>(vv==='h' && n.includes('kiai_male')) ? 0.9 : kind==='hut' ? 1.06 : 1});
+      rateFor: n=>(vv==='h' && !pain ? 0.86 : vv==='h' ? 0.94 : 1) * (big ? 0.9 : kind==='hut' ? 1.06 : 1)});
     if (ok){ lastVox[vv] = now; return; }
     SY.kiai(kind==='fall' ? 'long' : kind, power, v);
   };
@@ -699,7 +701,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610212141';
+const BUILD = '202610212151';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
