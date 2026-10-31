@@ -218,6 +218,11 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
 .d-seg button[aria-pressed="true"]{color:var(--ink);background:var(--fg);border-color:var(--fg)}
 .d-seg button:focus-visible{outline:2px solid var(--amber)}
 .d-card .cta{flex:none}
+.d-habit{margin:0;font-size:12.5px;line-height:1.55;color:var(--muted);text-align:left;padding:10px 12px;border-radius:9px;background:#24201b;border:1px solid #4a3f37}
+.d-habit b{color:var(--amber);font-weight:600}
+.d-habit span{font-size:11px}
+.d-habit button{all:unset;cursor:pointer;font-size:11px;margin-left:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--line-2);color:var(--fg)}
+.d-habit button:focus-visible{outline:2px solid var(--amber)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -281,6 +286,7 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
         <div class="d-card">
           <h3 id="dResTitle">승리</h3>
           <p id="dResSub"></p>
+          <p class="d-habit" id="dHabit"></p>
           <div class="d-opt"><span>내 캐릭터 (왼쪽)</span>
             <div class="d-seg" id="dPick"><button type="button" data-p="male" aria-pressed="true">리얼 파이터</button><button type="button" data-p="girl" aria-pressed="false">퓨처리스틱 걸</button></div>
           </div>
@@ -718,7 +724,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610311434';
+const BUILD = '202610311618';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -1001,11 +1007,52 @@ const DM = {
 const PAD5 = ['jab','cross','hook','combo4','elbow','bodyonetwo','frontkick','roundhouse','sidekick','spinback','lowkick','knee','block','dodge'];
 const PAD_ORDER = ['jab','cross','hook','combo4','elbow','bodyonetwo','block','frontkick','roundhouse','sidekick','spinback','lowkick','knee','dodge'];
 const DIFF = {
-  easy:   {ko:'쉬움',   react:0.15, delay:0.32, think:[1.3,2.4], wait:0.35, punish:0.2},
-  normal: {ko:'보통',   react:0.35, delay:0.24, think:[0.8,1.6], wait:0.25, punish:0.5},
-  hard:   {ko:'어려움', react:0.58, delay:0.17, think:[0.45,1.0], wait:0.12, punish:0.85},
+  easy:   {ko:'쉬움',   react:0.15, delay:0.32, think:[1.3,2.4], wait:0.35, punish:0.2, read:0.15},
+  normal: {ko:'보통',   react:0.35, delay:0.24, think:[0.8,1.6], wait:0.25, punish:0.5, read:0.55},
+  hard:   {ko:'어려움', react:0.58, delay:0.17, think:[0.45,1.0], wait:0.12, punish:0.85, read:0.9},
 };
 const SPACING = 1.15, ARENA_X = 3.4;
+
+// ---------- habit reader: remembers what you tend to do next (2- and 1-step chains, slowly forgetting) ----------
+const Habit = (()=>{
+  const KEY = 'dojo-habits-v1', fresh = ()=>({v:1, n1:{}, n2:{}, u:{}, total:0});
+  let H = null; try { H = JSON.parse(localStorage.getItem(KEY)); } catch(_){}
+  if (!H || H.v !== 1) H = fresh();
+  let chain = [], lastT = -9, lastWalk = {a:null, t:-9};
+  const sum = r=>Object.values(r).reduce((a,b)=>a+b, 0);
+  function bump(tbl, k, next){ const r = tbl[k] || (tbl[k] = {}); for (const x in r) r[x] *= 0.96; r[next] = (r[next]||0) + 1; }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(H)); } catch(_){} }
+  function dist(){
+    const k2 = chain.slice(-2).join('>'), k1 = chain[chain.length-1];
+    for (const [t, k, src] of [[H.n2, k2, 2], [H.n1, k1, 1], [H.u, '_', 0]]){
+      if (!k || !t[k]) continue; const s = sum(t[k]); if (s >= 3) return {r:t[k], s, src};
+    }
+    return null;
+  }
+  return {
+    // a move you actually started, or a step forward / back
+    record(a, now){
+      if (a==='fwd' || a==='back'){ if (lastWalk.a===a && now - lastWalk.t < 1.2){ lastWalk.t = now; return; } lastWalk = {a, t:now}; }
+      if (now - lastT > 4) chain = [];                                  // a long pause breaks the chain
+      if (chain.length >= 1) bump(H.n1, chain[chain.length-1], a);
+      if (chain.length >= 2) bump(H.n2, chain.slice(-2).join('>'), a);
+      bump(H.u, '_', a); H.total++;
+      chain.push(a); if (chain.length > 3) chain.shift(); lastT = now; save();
+    },
+    prob(m){ const d = dist(); return d ? (d.r[m]||0)/d.s : 0; },
+    predict(){ const d = dist(); if (!d) return null; let best = null, bv = 0;
+      for (const [m, v] of Object.entries(d.r)) if (v > bv){ bv = v; best = m; }
+      return {move:best, p:bv/d.s, src:d.src, n:d.s}; },
+    top(){ let best = null;
+      for (const [k, r] of Object.entries(H.n2)){ const s = sum(r); if (s < 3) continue;
+        for (const [m, v] of Object.entries(r)){ const sc = (v/s)*Math.min(1, s/6); if (!best || sc > best.sc) best = {from:k, to:m, p:v/s, sc}; } }
+      return best; },
+    reset(){ H = fresh(); chain = []; save(); },
+    newBout(){ chain = []; lastT = -9; },
+    get total(){ return H.total; },
+  };
+})();
+const HNAME = m=>m==='fwd' ? '전진' : m==='back' ? '후퇴' : (DM[m]?.ko || m);
 let duel = null;
 const dSet = {player:'male', diff:'normal'};
 
@@ -1219,6 +1266,7 @@ class Fighter {
     const dur = a.getClip().duration; this.lockUntil = now + dur + m.rest;
     if (m.type==='def'){
       this.state = id;
+      if (!this.cpu) Habit.record(id, now);
       if (id==='dodge') this.slide = {from:this.x, to:clampX(this.x + this.side*0.35), t0:now, d:0.45};
       return true;
     }
@@ -1232,7 +1280,9 @@ class Fighter {
       if (i===0 || m.heavy) this.events.push({t:Math.max(0,t-0.06), f:()=>Sound.ready && Sound.kiai(i===0 ? (m.heavy?'iyap':'short') : 'hut', 1, this.voice)});
       this.windows.push({t0:Math.max(0,t-0.07), t1:t+0.22, i, last:i===n-1, dmg:m.dmg/n, done:false});
     });
-    opp.onThreat && opp.onThreat(this, id, now + first);
+    const guessed = this.cpu ? 0 : Habit.prob(id);
+    if (!this.cpu) Habit.record(id, now);
+    opp.onThreat && opp.onThreat(this, id, now + first, guessed);
     return true;
   }
   // called every frame after poses are final: does the striking limb touch the opponent?
@@ -1292,6 +1342,7 @@ class Fighter {
       this.root.position.x = clampX(this.x + this.walk*v);
       this.stepAcc += v; if (this.stepAcc > 0.3){ this.stepAcc = 0; Sound.ready && Sound.step(0.3); }
     }
+    if (moving && !this.walking && !this.cpu && duel && duel.phase==='fight') Habit.record(fwd ? 'fwd' : 'back', now);
     this.walking = moving;
     this.mixer.update(dt);
     if (useClip && this.curName === stepName){
@@ -1372,7 +1423,11 @@ function flash(f, text){ const el = f.side<0 ? $('dStateL') : $('dStateR'); el.t
 // ---------- CPU: picks a technique, walks into its real range, then throws it ----------
 function cpuThink(c, p, now){
   const D = DIFF[dSet.diff];
-  if (c.react && now >= c.react.at){ const r = c.react; c.react = null; if (c.canAct(now)){ c.walk = 0; c.start(r.kind, p, now); } }
+  // a planned guard/dodge waits for the end of hit-stun, as long as it can still beat the strike
+  if (c.react && now >= c.react.at){
+    if (c.canAct(now)){ const r = c.react; c.react = null; c.walk = 0; c.start(r.kind, p, now); }
+    else if (now > c.react.until) c.react = null;
+  }
   if (!c.canAct(now)){ c.walk = 0; return; }
   const gap = c.x - p.x;
   if (c.backUntil && now < c.backUntil){ c.walk = +1; return; }
@@ -1380,12 +1435,22 @@ function cpuThink(c, p, now){
     const want = c.reach[c.plan] + 0.12;
     if (now > c.planUntil){ c.plan = null; c.walk = 0; }
     else if (gap > want + 0.35){ c.walk = -1; return; }          // walk in until a short lunge covers the rest
-    else { c.walk = 0; const id = c.plan; c.plan = null; c.start(id, p, now); return; }
+    else { c.walk = 0; const id = c.plan; c.plan = null; if (c.start(id, p, now) && c.readNote){ flash(c, '읽었다'); } c.readNote = null; return; }
   }
   c.walk = 0;
   if (now < (c.nextThink||0)) return;
   c.nextThink = now + D.think[0] + Math.random()*(D.think[1]-D.think[0]);
   if (gap < 0.62 && Math.random() < 0.45){ c.backUntil = now + 0.35 + Math.random()*0.3; return; }   // too close: reset the distance
+  // read the player: if their next move is predictable, answer it instead of rolling dice
+  const guess = Habit.predict();
+  if (guess && guess.p >= 0.4 && Math.random() < D.read * Math.min(1, guess.p + 0.2)){
+    const g = guess.move, ok = id=>c.actions[id] && now >= (c.ready[id]||0);
+    if (g==='block' && ok('lowkick')){ c.plan = 'lowkick'; c.planUntil = now + 2; c.readNote = '막기를 읽음'; return; }   // guard up? go low
+    if (g==='dodge'){ c.nextThink = now + 0.7; c.readNote = null; flash(c, '읽었다'); return; }                          // let the dodge hit air
+    if (g==='back'){ const id = ok('sidekick') ? 'sidekick' : ok('frontkick') ? 'frontkick' : null; if (id){ c.plan = id; c.planUntil = now + 2; c.readNote = '후퇴를 읽음'; return; } }
+    if (g==='fwd' && ok('jab')){ c.plan = 'jab'; c.planUntil = now + 1.5; c.readNote = '전진을 읽음'; return; }            // meet the step-in
+    if (DM[g] && DM[g].heavy){ c.backUntil = now + 0.5; flash(c, '읽었다'); return; }                                       // step out of the big one
+  }
   if (Math.random() < D.wait) return;                          // breathe, watch
   const punish = (p.lockUntil - now > 0.7) && Math.random() < D.punish;
   const pool = Object.keys(DM).filter(id=>DM[id].type!=='def' && c.actions[id] && now >= (c.ready[id]||0));
@@ -1397,12 +1462,16 @@ function cpuThink(c, p, now){
   c.plan = pick; c.planUntil = now + 2.2;
 }
 function cpuOnThreat(c){
-  return (att, id, impactAt)=>{
-    const D = DIFF[dSet.diff]; if (Math.random() > D.react) return;
-    const at = duel.time + D.delay;
+  return (att, id, impactAt, guessed=0)=>{
+    // a move it saw coming is answered more often and sooner
+    const D = DIFF[dSet.diff], readBoost = D.read * guessed;
+    const chance = Math.min(0.92, D.react + readBoost);
+    if (Math.random() > chance) return;
+    const read = readBoost > 0.15 && Math.random() < readBoost / chance;
+    const at = duel.time + D.delay * (read ? 0.5 : 1);
     if (impactAt - at < 0.1) return;                             // too late to react
-    const kind = (DM[id].heavy && Math.random()<0.5) ? 'dodge' : 'block';
-    if (duel.time >= (c.ready[kind]||0)) c.react = {at, kind};
+    const kind = (id==='lowkick' || (DM[id].heavy && Math.random()<0.5)) ? 'dodge' : 'block';
+    if (duel.time >= (c.ready[kind]||0)){ c.react = {at, kind, until: impactAt - 0.1}; if (read) flash(c, '읽었다'); }
   };
 }
 
@@ -1496,6 +1565,7 @@ async function enterDuel(){
   mat.visible = false; controls.enabled = false; setAuto(false); setCamMode('auto');
   controls.minDistance = 0.8; controls.maxDistance = 12; controls.maxPolarAngle = Math.PI*0.49; controls.enablePan = false;
   const D = duel = {time:0, phase:'build', over:false, slowUntil:0};
+  Habit.newBout();
   sizePad();
   const arena = buildArena(); scene.add(arena); D.arena = arena;
   const lightA = new THREE.HemisphereLight(0xffe6c4, 0x3a2a1c, 0.0); scene.add(lightA); D.hemi = lightA;
@@ -1565,6 +1635,10 @@ function endDuel(winner){
   setTimeout(()=>{ if (duel!==D) return; if (winner.state==='idle' || winner.canAct(D.time)) { winner.state='bow'; winner.play('bow',{fade:.3, ts:1.2}); } }, 1800);
   setTimeout(()=>{ if (duel!==D) return; banner('',''); $('dResTitle').textContent = youWin ? '승리' : '패배';
     $('dResSub').textContent = `${CHARS[D.pKey].ko} ${Math.round(D.p.hp)} : ${Math.round(D.c.hp)} ${CHARS[D.cKey].ko} · ${Math.round(D.time - D.fightStart)}초`;
+    const tp = Habit.top();
+    $('dHabit').innerHTML = tp ? `컴퓨터가 읽은 버릇: <b>${tp.from.split('>').map(HNAME).join(' → ')} 다음엔 ${HNAME(tp.to)}</b> (${Math.round(tp.p*100)}%)<br><span>기억한 동작 ${Habit.total}개</span> <button type="button" id="dForget">기억 지우기</button>`
+                                : `아직 뚜렷한 버릇을 찾지 못했어요. 싸울수록 컴퓨터가 버릇을 익힙니다.`;
+    const fb = $('dForget'); if (fb) fb.onclick = ()=>{ Habit.reset(); $('dHabit').textContent = '기억을 지웠어요. 다음 결투부터 처음부터 다시 익힙니다.'; };
     syncSeg(); $('dResult').classList.add('on'); }, 3600);
 }
 function leaveDuel(){
@@ -1761,7 +1835,7 @@ addEventListener('keyup', e=>{ const k = e.key.toLowerCase(); if (k==='arrowleft
 addEventListener('blur', ()=>{ held.l = held.r = false; syncMove(); });
 const DKEYS = Object.fromEntries(Object.entries(DM).map(([id,m])=>[m.k.toLowerCase(), id]));
 addEventListener('keydown', e=>{ if (!duel) return; const id = DKEYS[e.key.toLowerCase()]; if (id){ e.preventDefault(); e.stopImmediatePropagation(); press(id); } }, true);
-Object.defineProperties(window.__dojo, {duel:{get:()=>duel}, dset:{get:()=>dSet}});
+Object.defineProperties(window.__dojo, {duel:{get:()=>duel}, dset:{get:()=>dSet}, habit:{get:()=>Habit}});
 
 loadCharacter(startChar);
 </script>
