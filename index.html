@@ -1,4 +1,16 @@
+<!doctype html>
+<html lang="ko">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121417">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="무술 수련장">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}body{margin:0}[hidden]{display:none!important}</style>
 <title>무술 수련장</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -116,6 +128,10 @@ input[type=range]{flex:1;accent-color:var(--amber)}
   .picker{flex-direction:row;padding:5px;gap:4px} .picker-l,.picker .nm{display:none} .picker button{padding:5px} .picker i{width:24px;height:24px}
 }
 /* ---------- duel mode ---------- */
+.install-btn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:10px 14px;border-radius:10px;
+  background:#1f2a28;border:1px solid #3d5c58;color:var(--fg);font-weight:600}
+.install-btn b{font-size:15px} .install-btn small{font-size:11px;color:#9fc6c1;font-weight:400}
+.install-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .duel-btn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;padding:12px 14px;border-radius:10px;
   background:linear-gradient(135deg,#5a1f17,#2c1410);border:1px solid #9b3a26;color:var(--fg);font-weight:600}
 .duel-btn b{font-family:var(--f-display);font-weight:400;font-size:20px;letter-spacing:.04em}
@@ -279,6 +295,7 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
 
   <aside class="rail">
     <div class="brand"><h1>무술 수련장</h1><span id="brandTag">ARMOR_SUIT · 16 MOTIONS</span></div>
+    <button type="button" class="install-btn" id="installGo" hidden><span><b>앱으로 설치</b><br><small>홈 화면 아이콘 · 전체 화면 · 인터넷 없이도 실행</small></span><span aria-hidden="true">↓</span></button>
     <button type="button" class="duel-btn" id="duelGo"><span><b>결투 모드</b><br><small>리얼 파이터 vs 퓨처리스틱 걸 · 컴퓨터 대전</small></span><span aria-hidden="true">→</span></button>
     <dl class="tally">
       <div><dt>총 동작</dt><dd id="tTotal">0</dd></div>
@@ -312,7 +329,7 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
   </aside>
 </div>
 
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -701,7 +718,7 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
 };
-const BUILD = '202610212203';
+const BUILD = '202610311434';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -1747,4 +1764,18 @@ addEventListener('keydown', e=>{ if (!duel) return; const id = DKEYS[e.key.toLow
 Object.defineProperties(window.__dojo, {duel:{get:()=>duel}, dset:{get:()=>dSet}});
 
 loadCharacter(startChar);
+</script>
+
+<script>
+// installable app: offline cache + install button
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  addEventListener('load', ()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+(()=>{
+  const btn = document.getElementById('installGo'); let ev = null;
+  const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+  addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); ev = e; if (!standalone && btn) btn.hidden = false; });
+  addEventListener('appinstalled', ()=>{ if (btn) btn.hidden = true; });
+  btn && btn.addEventListener('click', async ()=>{ if (!ev) return; ev.prompt(); try { await ev.userChoice; } catch(_){} ev = null; btn.hidden = true; });
+})();
 </script>
