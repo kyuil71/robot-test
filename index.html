@@ -351,6 +351,7 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
 <script type="module">
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 
@@ -737,8 +738,8 @@ const CHARS = {
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
   irobny:{file:'irobny.glb',  name:'RED ARMOR', ko:'레드 아머', voice:'m'},
 };
-const BUILD = '202611191616';
-const loader = new GLTFLoader();
+const BUILD = '202611191641';
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);   // compressed models (red armor)
 const cache = {};
 function fetchChar(key){
   if (!cache[key]) cache[key] = new Promise((res, rej)=>loader.load(CHARS[key].file + '?v=' + BUILD, res, ev=>{
