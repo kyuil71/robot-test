@@ -54,6 +54,7 @@ body{margin:0;background:var(--ink);color:var(--fg);font-family:var(--f-body);fo
 .sw-armor{background:linear-gradient(135deg,#dcdcd6 0 55%,#46605f 55% 80%,#ffae35 80%)}
 .sw-male{background:linear-gradient(135deg,#c79c82 0 40%,#1d1d1f 40% 75%,#4a4a42 75%)}
 .sw-girl{background:linear-gradient(135deg,#1c1f24 0 50%,#c9ccd6 50% 72%,#3fd0d4 72%)}
+.sw-irobny{background:linear-gradient(135deg,#8e1c1a 0 52%,#d8b46a 52% 78%,#bfe9ff 78%)}
 .snd-chip{all:unset;cursor:pointer;position:absolute;top:max(14px,env(safe-area-inset-top,0px));right:max(14px,env(safe-area-inset-right,0px));
   padding:8px 12px;border-radius:999px;font-size:12px;font-weight:600;background:var(--amber);color:var(--ink);box-shadow:0 4px 18px rgba(0,0,0,.35)}
 .snd-chip:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
@@ -217,6 +218,9 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
 .d-seg button{all:unset;cursor:pointer;flex:1;text-align:center;padding:8px 4px;border-radius:7px;font-size:12.5px;border:1px solid var(--line-2);color:var(--muted)}
 .d-seg button[aria-pressed="true"]{color:var(--ink);background:var(--fg);border-color:var(--fg)}
 .d-seg button:focus-visible{outline:2px solid var(--amber)}
+.d-seg.g4{display:grid;grid-template-columns:1fr 1fr}
+.d-seg button[aria-disabled="true"]{opacity:.3;cursor:not-allowed}
+.d-setup{position:fixed;z-index:40}
 .d-card .cta{flex:none}
 .d-habit{margin:0;font-size:12.5px;line-height:1.55;color:var(--muted);text-align:left;padding:10px 12px;border-radius:9px;background:#24201b;border:1px solid #4a3f37}
 .d-habit b{color:var(--amber);font-weight:600}
@@ -235,6 +239,17 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
       <button type="button" title="아머 슈트" aria-label="아머 슈트" data-char="armor" aria-pressed="true"><i class="sw-armor"></i><span class="nm">아머 슈트</span></button>
       <button type="button" title="퓨처리스틱 걸" aria-label="퓨처리스틱 걸" data-char="girl" aria-pressed="false"><i class="sw-girl"></i><span class="nm">퓨처리스틱 걸</span></button>
       <button type="button" title="리얼 파이터" aria-label="리얼 파이터" data-char="male" aria-pressed="false"><i class="sw-male"></i><span class="nm">리얼 파이터</span></button>
+      <button type="button" title="레드 아머" aria-label="레드 아머" data-char="irobny" aria-pressed="false"><i class="sw-irobny"></i><span class="nm">레드 아머</span></button>
+    </div>
+    <div class="d-result d-setup" id="dSetup" role="dialog" aria-label="결투 준비">
+      <div class="d-card">
+        <h3>결투 준비</h3>
+        <p>캐릭터 네 명 중에서 나와 상대를 고르세요.</p>
+        <div class="d-opt"><span>내 캐릭터 (왼쪽)</span><div class="d-seg g4 d-pickP"></div></div>
+        <div class="d-opt"><span>상대 캐릭터 (오른쪽 · 컴퓨터)</span><div class="d-seg g4 d-pickO"></div></div>
+        <div class="d-opt"><span>상대 실력</span><div class="d-seg d-diffS"></div></div>
+        <div class="btns" style="display:flex;gap:8px"><button type="button" class="cta" id="dStart">결투 시작</button><button type="button" class="cta ghost" id="dCancel">취소</button></div>
+      </div>
     </div>
     <div class="loading" id="loading">캐릭터 불러오는 중…</div>
     <div class="call idle" id="call"><b id="callKo">준비</b><small id="callEn">Fighting Idle</small></div>
@@ -287,12 +302,9 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
           <h3 id="dResTitle">승리</h3>
           <p id="dResSub"></p>
           <p class="d-habit" id="dHabit"></p>
-          <div class="d-opt"><span>내 캐릭터 (왼쪽)</span>
-            <div class="d-seg" id="dPick"><button type="button" data-p="male" aria-pressed="true">리얼 파이터</button><button type="button" data-p="girl" aria-pressed="false">퓨처리스틱 걸</button></div>
-          </div>
-          <div class="d-opt"><span>상대 실력</span>
-            <div class="d-seg" id="dDiff"><button type="button" data-d="easy" aria-pressed="false">쉬움</button><button type="button" data-d="normal" aria-pressed="true">보통</button><button type="button" data-d="hard" aria-pressed="false">어려움</button></div>
-          </div>
+          <div class="d-opt"><span>내 캐릭터 (왼쪽)</span><div class="d-seg g4 d-pickP"></div></div>
+          <div class="d-opt"><span>상대 캐릭터 (오른쪽 · 컴퓨터)</span><div class="d-seg g4 d-pickO"></div></div>
+          <div class="d-opt"><span>상대 실력</span><div class="d-seg d-diffS"></div></div>
           <div class="btns" style="display:flex;gap:8px"><button type="button" class="cta" id="dAgain">다시 결투</button><button type="button" class="cta ghost" id="dLeave">연습 모드로</button></div>
         </div>
       </div>
@@ -302,7 +314,7 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
   <aside class="rail">
     <div class="brand"><h1>무술 수련장</h1><span id="brandTag">ARMOR_SUIT · 16 MOTIONS</span></div>
     <button type="button" class="install-btn" id="installGo" hidden><span><b>앱으로 설치</b><br><small>홈 화면 아이콘 · 전체 화면 · 인터넷 없이도 실행</small></span><span aria-hidden="true">↓</span></button>
-    <button type="button" class="duel-btn" id="duelGo"><span><b>결투 모드</b><br><small>리얼 파이터 vs 퓨처리스틱 걸 · 컴퓨터 대전</small></span><span aria-hidden="true">→</span></button>
+    <button type="button" class="duel-btn" id="duelGo"><span><b>결투 모드</b><br><small>캐릭터 4명 중 골라서 · 컴퓨터 대전</small></span><span aria-hidden="true">→</span></button>
     <dl class="tally">
       <div><dt>총 동작</dt><dd id="tTotal">0</dd></div>
       <div><dt>타격</dt><dd id="tStrike">0</dd></div>
@@ -723,8 +735,9 @@ const CHARS = {
   armor: {file:'fighter.glb', name:'ARMOR_SUIT', ko:'아머 슈트', voice:'m'},
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
+  irobny:{file:'irobny.glb',  name:'RED ARMOR', ko:'레드 아머', voice:'m'},
 };
-const BUILD = '202610311618';
+const BUILD = '202611191616';
 const loader = new GLTFLoader();
 const cache = {};
 function fetchChar(key){
@@ -1054,7 +1067,11 @@ const Habit = (()=>{
 })();
 const HNAME = m=>m==='fwd' ? '전진' : m==='back' ? '후퇴' : (DM[m]?.ko || m);
 let duel = null;
-const dSet = {player:'male', diff:'normal'};
+const dSet = {player:'male', opp:'girl', diff:'normal'};
+const CORDER = ['armor','girl','male','irobny'];
+try { const v = JSON.parse(localStorage.getItem('dojo-duel')||'null');
+  if (v && CHARS[v.player] && CHARS[v.opp] && v.player!==v.opp) Object.assign(dSet, {player:v.player, opp:v.opp});
+  if (v && v.diff) dSet.diff = v.diff; } catch(_){}
 
 // ---------- sound helpers specific to the duel ----------
 const SFX = (()=>{
@@ -1571,7 +1588,7 @@ async function enterDuel(){
   const lightA = new THREE.HemisphereLight(0xffe6c4, 0x3a2a1c, 0.0); scene.add(lightA); D.hemi = lightA;
   D.camFrom = camera.position.clone(); D.tgtFrom = controls.target.clone();
   banner('결투장 준비', '道場');
-  const pKey = dSet.player, cKey = pKey==='male' ? 'girl' : 'male';
+  const pKey = dSet.player, cKey = dSet.opp;
   D.loading = Promise.all([fetchChar(pKey), fetchChar(cKey)]);
   D.pKey = pKey; D.cKey = cKey;
   setNames(); buildPad(); hud();
@@ -1580,7 +1597,7 @@ async function enterDuel(){
 }
 function setNames(){
   $('dNameL').textContent = CHARS[dSet.player].ko;
-  $('dNameR').textContent = CHARS[dSet.player==='male'?'girl':'male'].ko;
+  $('dNameR').textContent = CHARS[dSet.opp].ko;
   $('dLvl').textContent = 'CPU · ' + DIFF[dSet.diff].ko;
 }
 function buildTimeline(){
@@ -1812,15 +1829,33 @@ function sizePad(){
 }
 new ResizeObserver(()=>sizePad()).observe($('dPad'));
 function syncSeg(){
-  document.querySelectorAll('#dPick button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.p===dSet.player));
-  document.querySelectorAll('#dDiff button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.d===dSet.diff));
+  document.querySelectorAll('.d-pickP button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.k===dSet.player));
+  document.querySelectorAll('.d-pickO button').forEach(b=>{ b.setAttribute('aria-pressed', b.dataset.k===dSet.opp); b.setAttribute('aria-disabled', b.dataset.k===dSet.player); });
+  document.querySelectorAll('.d-diffS button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.d===dSet.diff));
+  try { localStorage.setItem('dojo-duel', JSON.stringify(dSet)); } catch(_){}
 }
-document.querySelectorAll('#dPick button').forEach(b=>b.onclick = ()=>{ dSet.player = b.dataset.p; syncSeg(); });
-document.querySelectorAll('#dDiff button').forEach(b=>b.onclick = ()=>{ dSet.diff = b.dataset.d; syncSeg(); });
+function pickDuel(role, k){
+  if (role==='opp' && k===dSet.player) return;            // no mirror match
+  dSet[role] = k;
+  if (dSet.opp===dSet.player){ const i = CORDER.indexOf(k); dSet.opp = CORDER[(i+1)%CORDER.length]; }
+  syncSeg();
+}
+document.querySelectorAll('.d-pickP, .d-pickO').forEach(el=>{
+  const role = el.classList.contains('d-pickP') ? 'player' : 'opp';
+  el.innerHTML = CORDER.map(k=>`<button type="button" data-k="${k}"><i class="sw-${k}" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px"></i>${CHARS[k].ko}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick = ()=>pickDuel(role, b.dataset.k));
+});
+document.querySelectorAll('.d-diffS').forEach(el=>{
+  el.innerHTML = Object.keys(DIFF).map(d=>`<button type="button" data-d="${d}">${DIFF[d].ko}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick = ()=>{ dSet.diff = b.dataset.d; syncSeg(); });
+});
+syncSeg();
 $('dAgain').onclick = ()=>restartDuel();
 $('dLeave').onclick = ()=>leaveDuel();
 $('dExit').onclick = ()=>leaveDuel();
-$('duelGo').onclick = ()=>enterDuel();
+$('duelGo').onclick = ()=>{ syncSeg(); $('dSetup').classList.add('on'); };
+$('dCancel').onclick = ()=>$('dSetup').classList.remove('on');
+$('dStart').onclick = ()=>{ $('dSetup').classList.remove('on'); enterDuel(); };
 // footwork pad (hold) and arrow / A-D keys
 let moveDir = 0; const held = {l:false, r:false};
 function syncMove(){ moveDir = (held.r?1:0) - (held.l?1:0); document.getElementById('dmL')?.classList.toggle('on', held.l); document.getElementById('dmR')?.classList.toggle('on', held.r); }
