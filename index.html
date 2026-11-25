@@ -55,7 +55,7 @@ body{margin:0;background:var(--ink);color:var(--fg);font-family:var(--f-body);fo
 .sw-male{background:linear-gradient(135deg,#c79c82 0 40%,#1d1d1f 40% 75%,#4a4a42 75%)}
 .sw-girl{background:linear-gradient(135deg,#1c1f24 0 50%,#c9ccd6 50% 72%,#3fd0d4 72%)}
 .sw-irobny{background:linear-gradient(135deg,#8e1c1a 0 52%,#d8b46a 52% 78%,#bfe9ff 78%)}
-.sw-lavender{background:linear-gradient(135deg,#6e7aa6 0 55%,#f1efe9 55% 75%,#5a3d2e 75%)}
+.sw-sentinel{background:linear-gradient(135deg,#e9ebe8 0 50%,#3f5a5c 50% 78%,#e0b13a 78%)}
 .snd-chip{all:unset;cursor:pointer;position:absolute;top:max(14px,env(safe-area-inset-top,0px));right:max(14px,env(safe-area-inset-right,0px));
   padding:8px 12px;border-radius:999px;font-size:12px;font-weight:600;background:var(--amber);color:var(--ink);box-shadow:0 4px 18px rgba(0,0,0,.35)}
 .snd-chip:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
@@ -241,7 +241,7 @@ body.duel .snd-chip{top:auto;bottom:calc(var(--padH,120px) + 10px)}
       <button type="button" title="퓨처리스틱 걸" aria-label="퓨처리스틱 걸" data-char="girl" aria-pressed="false"><i class="sw-girl"></i><span class="nm">퓨처리스틱 걸</span></button>
       <button type="button" title="리얼 파이터" aria-label="리얼 파이터" data-char="male" aria-pressed="false"><i class="sw-male"></i><span class="nm">리얼 파이터</span></button>
       <button type="button" title="레드 아머" aria-label="레드 아머" data-char="irobny" aria-pressed="false"><i class="sw-irobny"></i><span class="nm">레드 아머</span></button>
-      <button type="button" title="라벤더 수트" aria-label="라벤더 수트" data-char="lavender" aria-pressed="false"><i class="sw-lavender"></i><span class="nm">라벤더 수트</span></button>
+      <button type="button" title="센티널" aria-label="센티널" data-char="sentinel" aria-pressed="false"><i class="sw-sentinel"></i><span class="nm">센티널</span></button>
     </div>
     <div class="d-result d-setup" id="dSetup" role="dialog" aria-label="결투 준비">
       <div class="d-card">
@@ -739,9 +739,9 @@ const CHARS = {
   girl:  {file:'girl.glb',    name:'FUTURISTIC GIRL', ko:'퓨처리스틱 걸', voice:'f'},
   male:  {file:'male.glb',    name:'REALISTIC MALE', ko:'리얼 파이터', voice:'h'},
   irobny:{file:'irobny.glb',  name:'RED ARMOR', ko:'레드 아머', voice:'m'},
-  lavender:{file:'lavender.glb', name:'LAVENDER SUIT', ko:'라벤더 수트', voice:'f'},
+  sentinel:{file:'sentinel.glb', name:'SENTINEL', ko:'센티널', voice:'m'},
 };
-const BUILD = '202611251015';
+const BUILD = '202611251030';
 const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);   // compressed models (red armor)
 const cache = {};
 function fetchChar(key){
@@ -1072,7 +1072,7 @@ const Habit = (()=>{
 const HNAME = m=>m==='fwd' ? '전진' : m==='back' ? '후퇴' : (DM[m]?.ko || m);
 let duel = null;
 const dSet = {player:'male', opp:'girl', diff:'normal'};
-const CORDER = ['armor','girl','male','irobny','lavender'];
+const CORDER = ['armor','girl','male','irobny','sentinel'];
 try { const v = JSON.parse(localStorage.getItem('dojo-duel')||'null');
   if (v && CHARS[v.player] && CHARS[v.opp] && v.player!==v.opp) Object.assign(dSet, {player:v.player, opp:v.opp});
   if (v && v.diff) dSet.diff = v.diff; } catch(_){}
